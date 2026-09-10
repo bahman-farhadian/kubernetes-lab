@@ -6,6 +6,10 @@ Build a production-like Kubernetes cluster from scratch for hands-on learning, c
 
 This repo documents cluster deployment on top of a set of already-provisioned VMs. **VM/host provisioning is out of scope** — bring your own VMs (manual install, Ansible, a cloud provider, or any other method), reachable over SSH with a base OS installed. The node count and roles you need are defined in this documentation.
 
+## Environments
+
+Two independent hosts, each running its own instance of this lab (never joined together — they reuse the same IP plan): a **laptop** (capped CPU share, smaller nodes) and a **server** (larger nodes, dedicated NVMe for root vs. Ceph OSD, one GPU worker). Both use the same deployment steps below; sizing for each lives in [02-hardware-inventory.md](02-hardware-inventory.md).
+
 ## Scenarios
 
 Two supported control-plane/etcd topologies — pick one before you provision VMs. Details and trade-offs: [01-scenarios.md](01-scenarios.md).
@@ -37,6 +41,7 @@ Each step is its own file in the repo root, numbered in the order you follow the
 | 14 | [Security Hardening](14-security-hardening.md) | Both |
 | 15 | [Day-2 Operations](15-day2-operations.md) | Both |
 | 16 | [Troubleshooting](16-troubleshooting.md) | Both |
+| 17 | [GPU Worker (NVIDIA)](17-gpu-node.md) | Server only |
 
 ```mermaid
 flowchart TD
@@ -52,6 +57,7 @@ flowchart TD
     S11 --> S12["12 Ingress"]:::common --> S13["13 Observability"]:::common
     S13 --> S14["14 Security Hardening"]:::common --> S15["15 Day-2 Operations"]:::common
     S15 --> S16["16 Troubleshooting"]:::common
+    S16 -. server only .-> S17["17 GPU Worker\n(NVIDIA)"]:::common
 
     classDef common fill:#57606a,stroke:#32383f,color:#ffffff
     classDef scenarioA fill:#8250df,stroke:#4b1f91,color:#ffffff
@@ -62,4 +68,4 @@ Purple = Scenario A (stacked etcd), amber = Scenario B (external etcd), gray = s
 
 ## Status
 
-Steps 00–15 have real, runnable procedure (commands, configs, package-hold policy). [16-troubleshooting.md](16-troubleshooting.md) stays an outline until issues actually come up during a run-through. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.
+Steps 00–15 and 17 have real, runnable procedure (commands, configs, package-hold policy). [16-troubleshooting.md](16-troubleshooting.md) stays an outline until issues actually come up during a run-through. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.

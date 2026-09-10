@@ -7,6 +7,7 @@
 - Learning focus: HA control plane, networking, storage (Ceph), security, day-2 operations.
 - Out of scope: VM/host provisioning. This repo assumes the VMs already exist (created manually, via Ansible, via a cloud provider, or any other method) and are reachable over SSH with a base OS installed.
 - Two supported topologies, chosen up front in [01-scenarios.md](01-scenarios.md).
+- Two independent target hosts — a laptop (capped CPU share, smaller footprint) and a dedicated server (larger nodes, one GPU worker) — each running its own instance of this lab, never joined together. See [02-hardware-inventory.md](02-hardware-inventory.md).
 - Style: manual, step-by-step, real commands — short enough to read end to end and understand what's happening, so you can later drive the same cluster with kubeadm scripted, Kubespray, or any other automation with eyes open.
 
 ## Fixed decisions
@@ -21,7 +22,8 @@ These are settled for the whole manual — later steps assume them rather than r
 | CNI | Calico (NetworkPolicy support, needed in [14-security-hardening.md](14-security-hardening.md)) |
 | Storage | Ceph, installed as native `apt` packages on the OS (not Rook) + Ceph-CSI inside the cluster |
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
-| Monitoring | node_exporter on every node + Prometheus/Grafana as native OS packages on a dedicated monitor node — outside the cluster, so cluster problems don't take monitoring down with them |
+| Monitoring | node_exporter on every node + Prometheus/Grafana as native OS packages, outside the cluster so cluster problems don't take monitoring down with them (dedicated `k8s-monitor` VM on the laptop; folded into `k8s-bastion` on the server — budget-dependent, see [02-hardware-inventory.md](02-hardware-inventory.md)) |
+| GPU (server only) | NVIDIA, single workload per GPU — driver + container toolkit + Kubernetes device plugin, no GPU Operator/MIG/time-slicing (see [17-gpu-node.md](17-gpu-node.md)) |
 | Container-count philosophy | Prefer a host-installed daemon over an in-cluster operator/pod wherever both exist (this is why Ceph and monitoring live outside Kubernetes) |
 
 ## Package hold policy

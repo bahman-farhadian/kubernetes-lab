@@ -14,3 +14,6 @@ Both scenarios.
 
 ## Prerequisites
 - Populated as issues come up during deployment.
+
+## Next
+- Server environment only: [17-gpu-node.md](17-gpu-node.md) (NVIDIA GPU worker setup)
