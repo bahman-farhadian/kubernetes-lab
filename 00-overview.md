@@ -26,9 +26,11 @@ These are settled for the whole manual — later steps assume them rather than r
 | GPU (server only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (see [17-gpu-node.md](17-gpu-node.md)) |
 | Container-count philosophy | Prefer a host-installed daemon over an in-cluster operator/pod wherever both exist (this is why Ceph and monitoring live outside Kubernetes) |
 
-## Package hold policy
+## Version pinning and the upgrade exercise
 
-Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `ceph-*`, `prometheus*`, `grafana`, …) gets `apt-mark hold`ed right after install. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you — upgrades to held packages are deliberate and go through [15-day2-operations.md](15-day2-operations.md), one node at a time. The `hold` command is repeated in each step next to the install it applies to.
+Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `ceph-*`, `etcd-*`, `prometheus*`, `grafana`, …) is installed at an **exact pinned version** (`apt install pkg=<version>`, never a bare `apt install pkg`) and `apt-mark hold`ed right after. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you.
+
+This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph), specifically so there's a real version to upgrade *to*. [15-day2-operations.md](15-day2-operations.md) walks the whole cluster through that upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
 
 ## Diagram color legend
 

@@ -6,10 +6,12 @@
 
 ## Steps
 
-**1. `node_exporter` on every node** — bastion, control-plane, etcd (Scenario B), workers, and `k8s-monitor` itself:
+**1. `node_exporter` on every node** — bastion, control-plane, etcd (Scenario B), workers, and `k8s-monitor` itself, same pinned version everywhere:
 ```sh
 sudo apt update
-sudo apt install -y prometheus-node-exporter
+apt-cache madison prometheus-node-exporter   # list exact available versions — pick one
+NODE_EXPORTER_VERSION="<version from the list above>"
+sudo apt install -y prometheus-node-exporter=${NODE_EXPORTER_VERSION}
 sudo apt-mark hold prometheus-node-exporter
 sudo systemctl enable --now prometheus-node-exporter
 ```
@@ -17,7 +19,9 @@ Verify locally: `curl -s localhost:9100/metrics | head`.
 
 **2. Prometheus on `k8s-monitor`:**
 ```sh
-sudo apt install -y prometheus
+apt-cache madison prometheus
+PROMETHEUS_VERSION="<version from the list above>"
+sudo apt install -y prometheus=${PROMETHEUS_VERSION}
 sudo apt-mark hold prometheus
 ```
 Add every node to the scrape config, `/etc/prometheus/prometheus.yml`:
@@ -48,7 +52,9 @@ curl -fsSL https://apt.grafana.com/gpg.key | sudo gpg --dearmor -o /etc/apt/keyr
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
   | sudo tee /etc/apt/sources.list.d/grafana.list
 sudo apt update
-sudo apt install -y grafana
+apt-cache madison grafana   # list exact available versions — pick one
+GRAFANA_VERSION="<version from the list above>"
+sudo apt install -y grafana=${GRAFANA_VERSION}
 sudo apt-mark hold grafana
 sudo systemctl enable --now grafana-server
 ```

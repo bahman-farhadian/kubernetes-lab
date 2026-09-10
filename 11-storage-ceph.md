@@ -2,16 +2,28 @@
 
 **Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
 
-Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](02-hardware-inventory.md). Package names below are current as of recent Debian releases; confirm with `apt-cache search ceph` on your actual system before installing, since Debian occasionally re-splits Ceph packages between releases.
+Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](02-hardware-inventory.md).
+
+Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later. So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md)), so [15-day2-operations.md](15-day2-operations.md) has a real Ceph upgrade to walk through.
 
 ## Steps — native Ceph cluster (run on `k8s-work-1/2/3`)
 
-**1. Install and hold packages** (all 3 nodes):
+**1. Add Ceph's repo and install a pinned release** (all 3 nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases and whether Debian 13/Trixie is built yet; if not, fall back to Debian's bundled `ceph-*` packages via `apt-cache policy ceph-common` instead of this repo):
 ```sh
+CEPH_DEPLOY_RELEASE=reef   # the "deploy" release for this exercise — one behind current stable
+curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph.gpg
+echo "deb [signed-by=/usr/share/keyrings/ceph.gpg] https://download.ceph.com/debian-${CEPH_DEPLOY_RELEASE}/ $(lsb_release -sc) main" \
+  | sudo tee /etc/apt/sources.list.d/ceph.list
 sudo apt update
-sudo apt install -y ceph-mon ceph-mgr ceph-osd ceph-common
+
+apt-cache madison ceph-common   # list exact available versions for this release — pick one
+CEPH_DEPLOY_VERSION="18.2.x-1~$(lsb_release -sc)"   # replace x with the patch you picked above
+
+sudo apt install -y ceph-mon=${CEPH_DEPLOY_VERSION} ceph-mgr=${CEPH_DEPLOY_VERSION} \
+  ceph-osd=${CEPH_DEPLOY_VERSION} ceph-common=${CEPH_DEPLOY_VERSION}
 sudo apt-mark hold ceph-mon ceph-mgr ceph-osd ceph-common
 ```
+Use the same `CEPH_DEPLOY_VERSION` on all three nodes.
 
 **2. Generate cluster identity + config** (once, e.g. on `k8s-work-1`):
 ```sh
@@ -81,11 +93,14 @@ sudo ceph auth get-or-create client.kubernetes \
 sudo ceph auth print-key client.kubernetes   # save this key for the Secret below
 ```
 
-**9. Deploy the Ceph-CSI RBD driver** (Helm; check [github.com/ceph/ceph-csi](https://github.com/ceph/ceph-csi) for the current chart version before pinning):
+**9. Deploy a pinned Ceph-CSI RBD driver version via Helm** (check [github.com/ceph/ceph-csi](https://github.com/ceph/ceph-csi) for the current chart version list):
 ```sh
 helm repo add ceph-csi https://ceph.github.io/csi-charts && helm repo update
+helm search repo ceph-csi/ceph-csi-rbd --versions | head   # pick an exact chart version
+CEPH_CSI_CHART_VERSION="<version from the list above>"
 kubectl create namespace ceph-csi-rbd
-helm install ceph-csi-rbd ceph-csi/ceph-csi-rbd -n ceph-csi-rbd --set csiConfig[0].clusterID="${FSID}" \
+helm install ceph-csi-rbd ceph-csi/ceph-csi-rbd -n ceph-csi-rbd --version "${CEPH_CSI_CHART_VERSION}" \
+  --set csiConfig[0].clusterID="${FSID}" \
   --set csiConfig[0].monitors[0]=10.0.1.21:6789 \
   --set csiConfig[0].monitors[1]=10.0.1.22:6789 \
   --set csiConfig[0].monitors[2]=10.0.1.23:6789

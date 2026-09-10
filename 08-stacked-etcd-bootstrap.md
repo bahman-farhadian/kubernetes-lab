@@ -4,25 +4,31 @@
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo and install, pinning a minor version (check [kubernetes.io/releases](https://kubernetes.io/releases/) for the current stable minor first, e.g. `v1.34`):
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [15-day2-operations.md](15-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
-KUBE_MINOR=v1.34   # verify this is still current before running
+KUBE_DEPLOY_MINOR=v1.33   # deploy minor: one behind current stable — check kubernetes.io/releases
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_MINOR}/deb/Release.key" \
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_MINOR}/deb/ /" \
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
+
+apt-cache madison kubeadm   # list exact available patch versions in this minor — pick one
+KUBE_DEPLOY_VERSION="1.33.x-1.1"   # replace x with the patch you picked from the list above
+
+sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION} kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
+Use the **same** `KUBE_DEPLOY_VERSION` on all three control-plane nodes — a version mismatch between them is exactly the kind of thing this pinning is meant to prevent.
 
-**2. On `k8s-ctrl-1` only** — initialize the cluster against the HAProxy VIP, with `--upload-certs` so the other control-plane nodes can join without manual cert copying:
+**2. On `k8s-ctrl-1` only** — initialize the cluster against the HAProxy VIP, with `--upload-certs` so the other control-plane nodes can join without manual cert copying. Pass `--kubernetes-version` explicitly so kubeadm doesn't reach out for whatever it thinks is latest — it must match the packages just installed:
 ```sh
 sudo kubeadm init \
   --control-plane-endpoint "10.0.1.10:6443" \
   --upload-certs \
-  --pod-network-cidr "192.168.0.0/16"
+  --pod-network-cidr "192.168.0.0/16" \
+  --kubernetes-version "v${KUBE_DEPLOY_VERSION%%-*}"
 ```
 Save the two `kubeadm join` commands it prints (one with `--control-plane --certificate-key ...`, one without). Then, still on `k8s-ctrl-1`:
 ```sh

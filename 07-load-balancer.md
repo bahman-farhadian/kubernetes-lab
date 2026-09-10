@@ -4,9 +4,12 @@
 
 ## Steps
 
-**1. Install and hold HAProxy** (single bastion VM, so no keepalived/VRRP needed — the bastion itself is the single point of entry by design in this lab):
+**1. Install a pinned, held HAProxy version** (single bastion VM, so no keepalived/VRRP needed — the bastion itself is the single point of entry by design in this lab):
 ```sh
-sudo apt update && sudo apt install -y haproxy
+sudo apt update
+apt-cache madison haproxy   # list exact available versions — pick one
+HAPROXY_VERSION="<version from the list above>"
+sudo apt install -y haproxy=${HAPROXY_VERSION}
 sudo apt-mark hold haproxy
 ```
 

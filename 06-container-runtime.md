@@ -7,10 +7,12 @@ Control-plane and worker nodes, both scenarios. Not required on etcd-only nodes 
 
 ## Steps
 
-**1. Install containerd from Debian's own repo** (keeps this manual to one apt source per concern — no extra `docker.com` repo):
+**1. Install a pinned containerd version from Debian's own repo** (keeps this manual to one apt source per concern — no extra `docker.com` repo), same version on every control-plane/worker node:
 ```sh
 sudo apt update
-sudo apt install -y containerd
+apt-cache madison containerd   # list exact available versions — pick one
+CONTAINERD_VERSION="<version from the list above>"
+sudo apt install -y containerd=${CONTAINERD_VERSION}
 ```
 > Verify the version kubeadm expects for your chosen Kubernetes minor (step 08) is satisfied: `containerd --version`. If Debian 13's bundled version is too old for the Kubernetes release you pick, use Docker's official `containerd.io` apt repo instead — check [download.docker.com](https://download.docker.com) for the current Debian 13/Trixie instructions before adding it.
 

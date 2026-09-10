@@ -18,7 +18,9 @@ If nothing shows up, the problem is host-level passthrough, not anything below.
 **2. Install the NVIDIA driver.** Debian ships one in `contrib`/`non-free-firmware` — enable those components first if they aren't already, then:
 ```sh
 sudo apt update
-sudo apt install -y nvidia-driver firmware-misc-nonfree
+apt-cache madison nvidia-driver   # list exact available versions — pick one
+NVIDIA_DRIVER_VERSION="<version from the list above>"
+sudo apt install -y nvidia-driver=${NVIDIA_DRIVER_VERSION} firmware-misc-nonfree
 sudo apt-mark hold nvidia-driver
 sudo reboot
 ```
@@ -32,7 +34,9 @@ curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-contai
   | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit.gpg] https://#' \
   | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 sudo apt update
-sudo apt install -y nvidia-container-toolkit
+apt-cache madison nvidia-container-toolkit   # list exact available versions — pick one
+NVIDIA_CTK_VERSION="<version from the list above>"
+sudo apt install -y nvidia-container-toolkit=${NVIDIA_CTK_VERSION}
 sudo apt-mark hold nvidia-container-toolkit
 ```
 

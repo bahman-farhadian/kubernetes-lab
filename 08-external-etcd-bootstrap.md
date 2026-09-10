@@ -6,10 +6,12 @@
 
 Etcd here runs as a native systemd service on `k8s-etcd-1/2/3` (no kubelet/containerd on these nodes — keeps them outside the "less containers" tradeoff entirely, per [00-overview.md](00-overview.md)).
 
-**1. Install etcd on `k8s-etcd-1/2/3`** (verify the exact package name first — Debian splits it as `etcd-server`/`etcd-client` on recent releases):
+**1. Install a pinned etcd version on `k8s-etcd-1/2/3`** (verify the exact package name first — Debian splits it as `etcd-server`/`etcd-client` on recent releases), same version on all three:
 ```sh
 sudo apt update
-sudo apt install -y etcd-server etcd-client
+apt-cache madison etcd-server   # list exact available versions — pick one
+ETCD_VERSION="<version from the list above>"
+sudo apt install -y etcd-server=${ETCD_VERSION} etcd-client=${ETCD_VERSION}
 sudo apt-mark hold etcd-server etcd-client
 sudo systemctl stop etcd   # reconfigure before first real start
 ```
@@ -59,14 +61,15 @@ etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1
 ```
 All 3 must report healthy before continuing.
 
-**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** (same repo setup as Scenario A — see [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) step 1), then copy the etcd CA + a client cert/key from step 2 onto `k8s-ctrl-1` (e.g. `/etc/kubernetes/pki/etcd/{ca,client,client-key}.pem`).
+**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — same repo setup and **same exact pinned `KUBE_DEPLOY_VERSION`** as Scenario A (see [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) step 1 — deliberately one minor behind current stable so there's a real upgrade to practice in [15-day2-operations.md](15-day2-operations.md)), then copy the etcd CA + a client cert/key from step 2 onto `k8s-ctrl-1` (e.g. `/etc/kubernetes/pki/etcd/{ca,client,client-key}.pem`).
 
-**6. `kubeadm init` on `k8s-ctrl-1`** pointing at the external etcd cluster:
+**6. `kubeadm init` on `k8s-ctrl-1`** pointing at the external etcd cluster, with `--kubernetes-version` pinned to match the packages installed in step 5:
 ```sh
 sudo kubeadm init \
   --control-plane-endpoint "10.0.1.10:6443" \
   --upload-certs \
   --pod-network-cidr "192.168.0.0/16" \
+  --kubernetes-version "v${KUBE_DEPLOY_VERSION%%-*}" \
   --external-etcd-endpoints "https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1.17:2379" \
   --external-etcd-cafile /etc/kubernetes/pki/etcd/ca.pem \
   --external-etcd-certfile /etc/kubernetes/pki/etcd/client.pem \
