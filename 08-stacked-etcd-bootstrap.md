@@ -2,11 +2,52 @@
 
 **Goal:** Initialize the HA control plane with `kubeadm`, etcd stacked on each control-plane node.
 
-## Covers
-- `kubeadm init` on `k8s-ctrl-1` with the apiserver VIP/LB endpoint from [07-load-balancer.md](07-load-balancer.md)
-- Certificate distribution to `k8s-ctrl-2` / `k8s-ctrl-3`
-- `kubeadm join --control-plane` on the remaining control-plane nodes
-- Verifying etcd cluster health across all 3 members
+## Steps
+
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo and install, pinning a minor version (check [kubernetes.io/releases](https://kubernetes.io/releases/) for the current stable minor first, e.g. `v1.34`):
+```sh
+KUBE_MINOR=v1.34   # verify this is still current before running
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_MINOR}/deb/Release.key" \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_MINOR}/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt update
+sudo apt install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+```
+
+**2. On `k8s-ctrl-1` only** — initialize the cluster against the HAProxy VIP, with `--upload-certs` so the other control-plane nodes can join without manual cert copying:
+```sh
+sudo kubeadm init \
+  --control-plane-endpoint "10.0.1.10:6443" \
+  --upload-certs \
+  --pod-network-cidr "192.168.0.0/16"
+```
+Save the two `kubeadm join` commands it prints (one with `--control-plane --certificate-key ...`, one without). Then, still on `k8s-ctrl-1`:
+```sh
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+**3. On `k8s-ctrl-2` and `k8s-ctrl-3`** — run the saved `--control-plane` join command from step 2 (the `--certificate-key` is only valid for 2 hours; if it's expired, regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs`):
+```sh
+sudo kubeadm join 10.0.1.10:6443 --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash> \
+  --control-plane --certificate-key <key>
+```
+
+**4. Verify etcd quorum** (from `k8s-ctrl-1`):
+```sh
+sudo kubectl -n kube-system exec etcd-k8s-ctrl-1 -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  member list
+```
+Expect 3 members, all `started`. Nodes stay `NotReady` until [10-cni.md](10-cni.md) — expected at this point.
 
 ## Bootstrap sequence
 

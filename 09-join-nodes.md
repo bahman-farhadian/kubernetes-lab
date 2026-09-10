@@ -2,10 +2,26 @@
 
 **Goal:** Join the worker nodes to the control plane bootstrapped in the previous step.
 
-## Covers
-- `kubeadm join` on `k8s-work-1/2/3`
-- Verifying node `Ready` status (will stay `NotReady` until CNI is installed)
-- Node labels/taints if any are needed for this lab
+## Steps
+
+**1. On each worker** — same Kubernetes apt repo as the control-plane nodes ([08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) step 1), but `kubelet` + `kubeadm` only (`kubectl` isn't needed on workers for this lab):
+```sh
+sudo apt install -y kubelet kubeadm
+sudo apt-mark hold kubelet kubeadm
+```
+
+**2. Join** — run the plain (non-`--control-plane`) join command printed by `kubeadm init` in step 08:
+```sh
+sudo kubeadm join 10.0.1.10:6443 --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash>
+```
+Token expired or lost? Generate a new one from `k8s-ctrl-1`: `sudo kubeadm token create --print-join-command`.
+
+**3. Verify** (from `k8s-ctrl-1`, or your workstation with `~/.kube/config` copied over):
+```sh
+kubectl get nodes -o wide
+```
+All nodes show up but stay `NotReady` until [10-cni.md](10-cni.md) installs pod networking — expected here.
 
 ## Join flow
 

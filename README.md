@@ -62,4 +62,4 @@ Purple = Scenario A (stacked etcd), amber = Scenario B (external etcd), gray = s
 
 ## Status
 
-Outline stage — each doc above currently holds a scope/goal outline, to be filled in with actual procedure as the lab is built.
+Steps 00–15 have real, runnable procedure (commands, configs, package-hold policy). [16-troubleshooting.md](16-troubleshooting.md) stays an outline until issues actually come up during a run-through. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.

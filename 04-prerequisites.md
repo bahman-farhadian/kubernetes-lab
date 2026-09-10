@@ -3,11 +3,18 @@
 **Goal:** Confirm every VM is in the expected starting state before any cluster-building step begins.
 
 ## Covers
-- Base OS and version assumed on all VMs
-- SSH access from the operator's workstation (and/or from the bastion) to every node
-- Minimum package baseline expected to already be present
-- Confirming the IP plan from [03-network-plan.md](03-network-plan.md) matches reality
-- Sudo/root access on every node
+- Base OS: **Debian 13 ("Trixie")**, minimal/netinst install, fully updated (`apt update && apt full-upgrade`) before you start
+- Every VM reachable by hostname/IP from your workstation (or via the bastion as a jump host) over SSH, key-based auth, with a `sudo`-capable non-root user
+- `curl`, `gnupg`, `ca-certificates` present (needed to add the Kubernetes/Ceph/Grafana apt repos in later steps)
+- The IP plan in [02-hardware-inventory.md](02-hardware-inventory.md) matches what's actually assigned to each VM
+- A working DNS resolver or internet mirror reachable from every node (apt repos, container images)
+
+## Verify before continuing
+```sh
+# from your workstation, once per node
+ssh <user>@<node-ip> 'cat /etc/os-release | grep VERSION_ID; sudo -n true && echo "sudo OK"'
+```
+Confirm `VERSION_ID="13"` and passwordless (or prompting) `sudo` works for every node in [02-hardware-inventory.md](02-hardware-inventory.md) before moving on.
 
 ## Prerequisites
 - [03-network-plan.md](03-network-plan.md)
