@@ -23,7 +23,7 @@ These are settled for the whole manual — later steps assume them rather than r
 | Storage | Ceph, installed as native `apt` packages on the OS (not Rook) + Ceph-CSI inside the cluster |
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
 | Monitoring | node_exporter on every node + Prometheus/Grafana as native OS packages, outside the cluster so cluster problems don't take monitoring down with them (dedicated `k8s-monitor` VM on the laptop; folded into `k8s-bastion` on the server — budget-dependent, see [02-hardware-inventory.md](02-hardware-inventory.md)) |
-| GPU (server only) | NVIDIA, single workload per GPU — driver + container toolkit + Kubernetes device plugin, no GPU Operator/MIG/time-slicing (see [17-gpu-node.md](17-gpu-node.md)) |
+| GPU (server only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (see [17-gpu-node.md](17-gpu-node.md)) |
 | Container-count philosophy | Prefer a host-installed daemon over an in-cluster operator/pod wherever both exist (this is why Ceph and monitoring live outside Kubernetes) |
 
 ## Package hold policy

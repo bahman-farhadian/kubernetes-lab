@@ -1,6 +1,8 @@
 # 17. GPU Worker — NVIDIA (k8s-work-4)
 
-**Goal:** Make the passed-through NVIDIA GPU on `k8s-work-4` usable by pods, via the plain Kubernetes device plugin (single workload per GPU — no MIG/time-slicing/GPU Operator, per [00-overview.md](00-overview.md)).
+**Goal:** Make the passed-through NVIDIA GPU on `k8s-work-4` usable by pods, via the plain Kubernetes device plugin (single workload per GPU — no MIG/time-slicing/GPU Operator, per [00-overview.md](00-overview.md)) — and reserve the node for GPU workloads only, via a taint, so ordinary pods can't land there and waste it.
+
+`k8s-work-4` is a VM with the physical GPU passed straight through to it (hypervisor-level PCI passthrough, out of scope here — see below); everything in this doc runs inside that guest.
 
 ## Applies to
 Server environment only, `k8s-work-4`. PCI passthrough/IOMMU config at the hypervisor is out of scope (see [00-overview.md](00-overview.md)) — this assumes the GPU already shows up inside the VM.
@@ -40,12 +42,14 @@ sudo nvidia-ctk runtime configure --runtime=containerd
 sudo systemctl restart containerd
 ```
 
-**5. Label the node** so the device plugin only schedules there (from `k8s-ctrl-1`):
+**5. Label *and taint* the node** (from `k8s-ctrl-1`) — the label lets the device plugin (and later, GPU pods) target this node; the taint is what actually reserves it, repelling every ordinary pod so the GPU isn't wasted on generic scheduling:
 ```sh
 kubectl label node k8s-work-4 gpu=nvidia
+kubectl taint node k8s-work-4 nvidia.com/gpu=present:NoSchedule
 ```
+From here on, only pods that explicitly carry the matching toleration below can land on `k8s-work-4` — that's the point.
 
-**6. Deploy the NVIDIA Kubernetes device plugin** as a DaemonSet, pinned to labeled nodes (check [github.com/NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) for the current release tag before pinning):
+**6. Deploy the NVIDIA Kubernetes device plugin** as a DaemonSet — it needs the toleration itself just to reach the now-tainted node (check [github.com/NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) for the current release tag before pinning):
 ```sh
 DEVICE_PLUGIN_VERSION=v0.17.0   # verify this is still current before running
 cat <<EOF | kubectl apply -f -
@@ -64,7 +68,8 @@ spec:
       nodeSelector: {gpu: nvidia}
       tolerations:
         - key: nvidia.com/gpu
-          operator: Exists
+          operator: Equal
+          value: present
           effect: NoSchedule
       containers:
         - name: nvidia-device-plugin-ctr
@@ -81,11 +86,32 @@ spec:
 EOF
 ```
 
-**7. Verify:**
+**7. Verify** the taint and allocatable GPU are in place:
 ```sh
+kubectl describe node k8s-work-4 | grep -A2 "Taints:"        # expect nvidia.com/gpu=present:NoSchedule
 kubectl describe node k8s-work-4 | grep -A3 "Allocatable:"   # expect nvidia.com/gpu: 1
 ```
-Then run a throwaway pod requesting `resources.limits: {nvidia.com/gpu: 1}` and confirm `nvidia-smi` works inside it.
+Then run a throwaway pod that opts in with the matching `nodeSelector` + `toleration` — without both, it will never be scheduled on `k8s-work-4`:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-smoke-test
+spec:
+  nodeSelector: {gpu: nvidia}
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: present
+      effect: NoSchedule
+  containers:
+    - name: cuda-test
+      image: nvcr.io/nvidia/cuda:12.6.0-base-ubuntu24.04   # verify this tag still exists before running
+      command: ["nvidia-smi"]
+      resources:
+        limits: {nvidia.com/gpu: 1}
+```
+`kubectl logs gpu-smoke-test` should show the card. Every real GPU workload later needs this same `nodeSelector`/`toleration`/`resources.limits` trio — that's the deliberate cost of tainting the node.
 
 ## Prerequisites
 - [06-container-runtime.md](06-container-runtime.md)

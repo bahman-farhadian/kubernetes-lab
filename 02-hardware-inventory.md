@@ -71,7 +71,7 @@ Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — si
 
 > No separate `k8s-monitor` VM here, unlike the laptop plan — this host's budget is fully committed (VM totals + host reserved already equal PC totals, no slack). Prometheus + Grafana run directly on `k8s-bastion` instead, which is sized generously enough (2 vCPU / 4 GB) to absorb it; see [13-observability.md](13-observability.md).
 >
-> `k8s-work-4` carries a passed-through NVIDIA GPU. PCI passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. In-guest driver and Kubernetes device-plugin setup: [17-gpu-node.md](17-gpu-node.md).
+> `k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: [17-gpu-node.md](17-gpu-node.md).
 
 ### Scenario B — External etcd
 
