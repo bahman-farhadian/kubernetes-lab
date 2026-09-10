@@ -5,7 +5,7 @@
 `k8s-work-4` is a VM with the physical GPU passed straight through to it (hypervisor-level PCI passthrough, out of scope here — see below); everything in this doc runs inside that guest.
 
 ## Applies to
-Server environment only, `k8s-work-4`. PCI passthrough/IOMMU config at the hypervisor is out of scope (see [00-overview.md](00-overview.md)) — this assumes the GPU already shows up inside the VM.
+GPU profile only, `k8s-work-4`. PCI passthrough/IOMMU config at the hypervisor is out of scope (see [00-overview.md](00-overview.md)) — this assumes the GPU already shows up inside the VM.
 
 ## Steps
 
@@ -123,4 +123,4 @@ spec:
 - [10-cni.md](10-cni.md)
 
 ## Next
-- None — this is the last step for environments with a GPU worker.
+- [18-deployment-log.md](18-deployment-log.md) — record what you actually deployed

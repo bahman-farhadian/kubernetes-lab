@@ -2,7 +2,7 @@
 
 **Goal:** Get metrics and logs flowing before relying on the cluster for anything.
 
-**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on one monitoring host: the dedicated `k8s-monitor` VM on the **laptop**, or `k8s-bastion` itself on the **server** (no budget headroom for a separate VM there — see [02-hardware-inventory.md](02-hardware-inventory.md)). Steps below say `k8s-monitor`; substitute `k8s-bastion` if you're on the server. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
+**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on one monitoring host: the dedicated `k8s-monitor` VM on **Light**, or `k8s-bastion` itself on **Heavy**/**GPU** (no budget headroom for a separate VM there — see [02-hardware-inventory.md](02-hardware-inventory.md)). Steps below say `k8s-monitor`; substitute `k8s-bastion` if you're on Heavy or GPU. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
 
 ## Steps
 
@@ -37,7 +37,7 @@ scrape_configs:
           - 10.0.1.21:9100   # k8s-work-1
           - 10.0.1.22:9100   # k8s-work-2
           - 10.0.1.23:9100   # k8s-work-3
-          - 10.0.1.31:9100   # k8s-monitor itself (laptop) — omit this line on the server; add 10.0.1.24:9100 (k8s-work-4) instead
+          - 10.0.1.31:9100   # k8s-monitor itself (Light only) — omit this line on Heavy/GPU; GPU adds 10.0.1.24:9100 (k8s-work-4) instead
 ```
 ```sh
 sudo systemctl restart prometheus

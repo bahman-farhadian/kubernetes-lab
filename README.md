@@ -6,9 +6,25 @@ Build a production-like Kubernetes cluster from scratch for hands-on learning, c
 
 This repo documents cluster deployment on top of a set of already-provisioned VMs. **VM/host provisioning is out of scope** — bring your own VMs (manual install, Ansible, a cloud provider, or any other method), reachable over SSH with a base OS installed. The node count and roles you need are defined in this documentation.
 
-## Environments
+## Deployment profiles
 
-Two independent hosts, each running its own instance of this lab (never joined together — they reuse the same IP plan): a **laptop** (capped CPU share, smaller nodes) and a **server** (larger nodes, dedicated NVMe for root vs. Ceph OSD, one GPU worker). Both use the same deployment steps below; sizing for each lives in [02-hardware-inventory.md](02-hardware-inventory.md).
+Three independent instances of this lab, never joined together (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles) for the full explanation:
+
+| Profile | Host | Notes |
+|---|---|---|
+| **Light** | Laptop | Capped CPU share, smaller nodes. Deploy this one first. |
+| **Heavy** | Server | Same shape as Light, bigger nodes. |
+| **GPU** | Server | Heavy + one GPU worker (`k8s-work-4`), passed-through NVIDIA, tainted. |
+
+All three follow the same deployment steps below; GPU adds step 17. Sizing for each: [02-hardware-inventory.md](02-hardware-inventory.md).
+
+## Rollout plan
+
+1. **Light (laptop) — current task.** Deploy first; it's the smallest, cheapest place to shake out mistakes before repeating the same steps on the server.
+2. **Heavy (server)** — once Light is healthy end to end (through [15-day2-operations.md](15-day2-operations.md)'s upgrade exercise).
+3. **GPU (server)** — add `k8s-work-4` and [17-gpu-node.md](17-gpu-node.md) on top of a healthy Heavy deployment, rather than bootstrapping GPU from scratch.
+
+Record the exact pinned component versions used on each run in [18-deployment-log.md](18-deployment-log.md).
 
 ## Scenarios
 
@@ -41,7 +57,8 @@ Each step is its own file in the repo root, numbered in the order you follow the
 | 14 | [Security Hardening](14-security-hardening.md) | Both |
 | 15 | [Day-2 Operations](15-day2-operations.md) | Both |
 | 16 | [Troubleshooting](16-troubleshooting.md) | Both |
-| 17 | [GPU Worker (NVIDIA)](17-gpu-node.md) | Server only |
+| 17 | [GPU Worker (NVIDIA)](17-gpu-node.md) | GPU profile only |
+| 18 | [Deployment Log](18-deployment-log.md) | All — appendix, filled in as you deploy |
 
 ```mermaid
 flowchart TD
@@ -57,7 +74,7 @@ flowchart TD
     S11 --> S12["12 Ingress"]:::common --> S13["13 Observability"]:::common
     S13 --> S14["14 Security Hardening"]:::common --> S15["15 Day-2 Operations"]:::common
     S15 --> S16["16 Troubleshooting"]:::common
-    S16 -. server only .-> S17["17 GPU Worker\n(NVIDIA)"]:::common
+    S16 -. GPU profile only .-> S17["17 GPU Worker\n(NVIDIA)"]:::common
 
     classDef common fill:#57606a,stroke:#32383f,color:#ffffff
     classDef scenarioA fill:#8250df,stroke:#4b1f91,color:#ffffff
@@ -68,4 +85,4 @@ Purple = Scenario A (stacked etcd), amber = Scenario B (external etcd), gray = s
 
 ## Status
 
-Steps 00–15 and 17 have real, runnable procedure (commands, configs, package-hold policy). [16-troubleshooting.md](16-troubleshooting.md) stays an outline until issues actually come up during a run-through. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.
+Steps 00–15 and 17 have real, runnable procedure (commands, configs, pinned-version installs). [16-troubleshooting.md](16-troubleshooting.md) stays an outline until issues actually come up during a run-through. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned. Actual deployment progress is tracked in [Rollout plan](#rollout-plan) above, not here.

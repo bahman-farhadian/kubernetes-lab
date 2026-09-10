@@ -4,14 +4,17 @@
 
 > VM creation itself is out of scope for this repo (see [00-overview.md](00-overview.md)). These tables describe what the VMs should look like once provisioned, regardless of how you provision them.
 
-## Two independent lab environments
+## Three independent lab environments
 
-This repo covers two separate hosts, each running its own **independent** instance of the lab — not one cluster spanning both. Both reuse the same `10.0.1.0/24` addressing (see [03-network-plan.md](03-network-plan.md)), which only works because they're never online as the same cluster at the same time. Build/rebuild each host's cluster on its own; don't try to join a laptop node to a server cluster or vice versa.
+This repo covers three deployment profiles — **Light**, **Heavy**, **GPU** (named in [00-overview.md](00-overview.md#deployment-profiles)) — across two physical hosts, each running its own **independent** instance of the lab, never one cluster spanning hosts. All three reuse the same `10.0.1.0/24` addressing (see [03-network-plan.md](03-network-plan.md)), which only works because no two are ever online at the same time. Build/rebuild each profile's cluster on its own; don't try to join a Light node to a Heavy/GPU cluster or vice versa.
 
-- **Laptop** — capped at 50% CPU share, smaller footprint, the original scratch environment.
-- **Server** — dedicated hardware, 250 GB NVMe for OS/root disks + 1 TB NVMe for Ceph OSDs, larger nodes, and one worker with a GPU.
+- **Light** (laptop) — capped at 50% CPU share, smaller footprint, the original scratch environment. **Deploy this one first.**
+- **Heavy** (server) — dedicated hardware, larger nodes, same node shape as Light otherwise.
+- **GPU** (server) — Heavy plus `k8s-work-4`, a worker with a passed-through NVIDIA GPU.
 
-## Laptop
+Rollout order and current status: [README.md](README.md#rollout-plan).
+
+## Laptop — Light profile
 
 Host budget: capped at 50% CPU share on the host. Adjust to your actual host's available cores/RAM/disk before sizing VMs.
 
@@ -49,11 +52,11 @@ Host budget: capped at 50% CPU share on the host. Adjust to your actual host's a
 | 10 | k8s-monitor | Prometheus + Grafana | 10.0.1.31 | 1 | 2 GB | 20 GB | - |
 | | **VM TOTALS** | | | TBD | TBD | TBD | 120 GB |
 
-## Server
+## Server — Heavy and GPU profiles
 
-Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap.
+Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step ([17-gpu-node.md](17-gpu-node.md)). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
 
-### Scenario A — Stacked etcd
+### Heavy — Scenario A (Stacked etcd)
 
 | # | VM Name | Role | IP Address | vCPU | RAM | Root Disk (250G NVMe) | Ceph OSD (1T NVMe) |
 |---|---|---|---|---|---|---|---|
@@ -64,18 +67,30 @@ Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — si
 | 05 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
 | 06 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 07 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
+| | **VM TOTALS** | | | **20** | **100 GB** | **170 GB** | **600 GB** |
+
+Leaves 4 vCPU / 28 GB / 80 GB root / 400 GB OSD of the box unused — that headroom is exactly `k8s-work-4`, reserved for the GPU profile below rather than spent here.
+
+No separate `k8s-monitor` VM, unlike Light — Prometheus + Grafana run directly on `k8s-bastion` instead, sized generously enough (2 vCPU / 4 GB) to absorb it; see [13-observability.md](13-observability.md).
+
+### GPU — Scenario A (Heavy + GPU worker)
+
+Everything in Heavy above, plus:
+
+| # | VM Name | Role | IP Address | vCPU | RAM | Root Disk (250G NVMe) | Ceph OSD (1T NVMe) |
+|---|---|---|---|---|---|---|---|
 | 08 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS** | | | **22** | **124 GB** | **190 GB** | **800 GB** |
+| | **VM TOTALS (Heavy + this row)** | | | **22** | **124 GB** | **190 GB** | **800 GB** |
 | | **HOST RESERVED** | | | **2** | **4 GB** | **60 GB** | **200 GB** |
 | | **PC TOTALS** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
-> No separate `k8s-monitor` VM here, unlike the laptop plan — this host's budget is fully committed (VM totals + host reserved already equal PC totals, no slack). Prometheus + Grafana run directly on `k8s-bastion` instead, which is sized generously enough (2 vCPU / 4 GB) to absorb it; see [13-observability.md](13-observability.md).
->
-> `k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: [17-gpu-node.md](17-gpu-node.md).
+The GPU profile is the only one that fully commits the box's budget (VM totals + host reserved = PC totals, no slack) — one more reason to bring Heavy up cleanly first.
 
-### Scenario B — External etcd
+`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: [17-gpu-node.md](17-gpu-node.md).
 
-Same pattern as the laptop's Scenario B: shave the control-plane nodes down to 2 and add 3 dedicated `k8s-etcd-*` VMs, carved out of the same budget above. Not sized yet — fill in if/when you need it.
+### Heavy/GPU — Scenario B (External etcd)
+
+Same pattern as Light's Scenario B: shave the control-plane nodes down to 2 and add 3 dedicated `k8s-etcd-*` VMs, carved out of the same budget above. Not sized yet — fill in if/when you need it.
 
 ## Prerequisites
 - [01-scenarios.md](01-scenarios.md)
