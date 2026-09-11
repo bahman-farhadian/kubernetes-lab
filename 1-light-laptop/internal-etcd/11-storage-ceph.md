@@ -4,20 +4,22 @@
 
 Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](../../02-hardware-inventory.md).
 
-Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later. So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-bootstrap.md](08-bootstrap.md)), so [15-day2-operations.md](15-day2-operations.md) has a real Ceph upgrade to walk through.
+Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later — and as of 2026-09 it bundles Reef (`18.2.7+ds-1+deb13u1`), which upstream Ceph already fully retired in March 2026 (final release 18.2.8). So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-bootstrap.md](08-bootstrap.md)), so [15-day2-operations.md](15-day2-operations.md) has a real Ceph upgrade to walk through: **Squid (v19.x) → Tentacle (v20.x)**.
+
+> **Debian 13/Trixie caveat, checked 2026-09:** Ceph's own [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) list Debian 13 as tier "C" — packages exist but aren't tested by the Ceph project itself — and there are real-world reports of `download.ceph.com`'s Debian repos not resolving cleanly on Trixie yet. Try the repo below first; if `apt update` fails against it, that's the known gap, and your fallback is Debian's own bundled Reef packages (`apt-cache policy ceph-common`) purely to get *a* working cluster for this lab — know that it's already past upstream EOL, so treat it as a stopgap, not something to run for real.
 
 ## Steps — native Ceph cluster (run on `k8s-work-1/2/3`)
 
-**1. Add Ceph's repo and install a pinned release** (all 3 nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases and whether Debian 13/Trixie is built yet; if not, fall back to Debian's bundled `ceph-*` packages via `apt-cache policy ceph-common` instead of this repo):
+**1. Add Ceph's repo and install a pinned release** (all 3 nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases before running, and see the Debian 13 caveat above):
 ```sh
-CEPH_DEPLOY_RELEASE=reef   # the "deploy" release for this exercise — one behind current stable
+CEPH_DEPLOY_RELEASE=squid   # v19.x — current stable as of 2026-09 (19.2.6), scheduled EOL 2026-10-31; reverify at docs.ceph.com/en/latest/releases
 curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph.gpg
 echo "deb [signed-by=/usr/share/keyrings/ceph.gpg] https://download.ceph.com/debian-${CEPH_DEPLOY_RELEASE}/ $(lsb_release -sc) main" \
   | sudo tee /etc/apt/sources.list.d/ceph.list
 sudo apt update
 
-apt-cache madison ceph-common   # list exact available versions for this release — pick one
-CEPH_DEPLOY_VERSION="18.2.x-1~$(lsb_release -sc)"   # replace x with the patch you picked above
+apt-cache madison ceph-common   # list exact available versions for this release — pick one; 19.2.6 was latest as of 2026-09
+CEPH_DEPLOY_VERSION="19.2.6-1~$(lsb_release -sc)"   # confirm this exact string against the madison output above
 
 sudo apt install -y ceph-mon=${CEPH_DEPLOY_VERSION} ceph-mgr=${CEPH_DEPLOY_VERSION} \
   ceph-osd=${CEPH_DEPLOY_VERSION} ceph-common=${CEPH_DEPLOY_VERSION}

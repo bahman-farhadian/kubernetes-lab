@@ -42,7 +42,17 @@ These are settled for the whole manual — later steps assume them rather than r
 
 Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `ceph-*`, `etcd-*`, `prometheus*`, `grafana`, …) is installed at an **exact pinned version** (`apt install pkg=<version>`, never a bare `apt install pkg`) and `apt-mark hold`ed right after. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you.
 
-This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `15-day2-operations.md` (e.g. [1-light-laptop/internal-etcd/15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
+This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `15-day2-operations.md` (e.g. [1-light-laptop/internal-etcd/15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. Staying current matters here, not just as an exercise: an untouched cluster silently ages out of its security-support window. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
+
+**Checked 2026-09** (Kubernetes has no LTS track — it ships a new minor roughly every 4 months and supports the 3 most recent; Ceph ships a new stable release roughly once a year, in support until the next-next one ships):
+
+| Component | Deploy version | Upgrade-to version | Source |
+|---|---|---|---|
+| Kubernetes | v1.36 (latest patch 1.36.4) | v1.37 (current stable, released 2026-08-26) | [kubernetes.io/releases](https://kubernetes.io/releases/) |
+| Ceph | Squid v19.x (latest 19.2.6) — **EOL 2026-10-31**, don't linger on it | Tentacle v20.x (latest 20.2.4) | [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) |
+| Calico (not part of the upgrade exercise, just the initial pin) | — | v3.32.2 | [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases) |
+
+Re-check all three before you actually run the steps — this table is a snapshot, not a promise. Debian 13/Trixie's own `ceph-common` (`18.2.7+ds-1+deb13u1`, Reef) is already past Reef's upstream end of life, and Ceph's official [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) rate Debian 13 tier "C" (packages exist, untested by the Ceph project) — [11-storage-ceph.md](1-light-laptop/internal-etcd/11-storage-ceph.md) has the fallback plan if `download.ceph.com`'s Trixie repo doesn't cooperate.
 
 ## Diagram color legend
 

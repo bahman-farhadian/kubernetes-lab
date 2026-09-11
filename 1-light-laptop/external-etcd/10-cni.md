@@ -8,7 +8,7 @@
 
 **1. Install the Tigera operator + Calico CRDs** (from `k8s-ctrl-1`, or wherever `~/.kube/config` is; check [projectcalico.org](https://projectcalico.org) for the current release tag before running — pin it, don't track `master`):
 ```sh
-CALICO_VERSION=v3.29.0   # verify this is still current before running
+CALICO_VERSION=v3.32.2   # latest as of 2026-09 — verify at github.com/projectcalico/calico/releases before running
 kubectl create -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
 ```
 

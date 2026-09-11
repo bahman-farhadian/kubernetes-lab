@@ -10,14 +10,14 @@ Deployed on `KUBE_DEPLOY_VERSION` (steps 08/09). Upgrading one minor at a time, 
 
 **1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
 ```sh
-KUBE_UPGRADE_MINOR=v1.34   # exactly one minor above KUBE_DEPLOY_MINOR — never skip a minor
+KUBE_UPGRADE_MINOR=v1.37   # exactly one minor above KUBE_DEPLOY_MINOR — never skip a minor. v1.37 was current stable as of 2026-09; reverify at kubernetes.io/releases since a new minor lands roughly every 4 months
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt update
-apt-cache madison kubeadm
-KUBE_UPGRADE_VERSION="1.34.x-1.1"   # pick from the list above
+apt-cache madison kubeadm   # 1.37.0 was the only patch out as of 2026-09 (minor just released 2026-08-26)
+KUBE_UPGRADE_VERSION="1.37.0-1.1"   # confirm this exact string against the madison output above
 ```
 
 **2. `k8s-ctrl-1`** — upgrade `kubeadm` first, apply the cluster upgrade, then `kubelet`/`kubectl`:
@@ -73,15 +73,15 @@ kubectl get nodes -o wide   # every node on the new version, all Ready
 
 ## Steps — Ceph release upgrade
 
-Deployed on `CEPH_DEPLOY_RELEASE`/`CEPH_DEPLOY_VERSION` (step 11). Order matters: **mons (one at a time) → mgrs → OSDs (one node at a time)**. Check the target release's own upgrade notes on [docs.ceph.com](https://docs.ceph.com/en/latest/releases/) first — some releases require an extra step (e.g. `ceph osd require-osd-release <name>`) once every daemon is upgraded, not assumed here since it depends which two releases you're moving between.
+Deployed on `CEPH_DEPLOY_RELEASE`/`CEPH_DEPLOY_VERSION` (step 11) — Squid (v19.x), current as of 2026-09 but scheduled to reach end of life 2026-10-31, so don't sit on it indefinitely; this exercise upgrades to Tentacle (v20.x). Order matters: **mons (one at a time) → mgrs → OSDs (one node at a time)**. Check the target release's own upgrade notes on [docs.ceph.com](https://docs.ceph.com/en/latest/releases/) first — some releases require an extra step (e.g. `ceph osd require-osd-release <name>`) once every daemon is upgraded, not assumed here since it depends which two releases you're moving between.
 
 **1. Point at the new release's repo** (all 3 nodes):
 ```sh
-CEPH_UPGRADE_RELEASE=squid   # the release you're upgrading to
+CEPH_UPGRADE_RELEASE=tentacle   # v20.x — current stable as of 2026-09 (20.2.4); reverify at docs.ceph.com/en/latest/releases
 sudo sed -i "s/debian-${CEPH_DEPLOY_RELEASE}/debian-${CEPH_UPGRADE_RELEASE}/" /etc/apt/sources.list.d/ceph.list
 sudo apt update
 apt-cache madison ceph-common
-CEPH_UPGRADE_VERSION="19.2.x-1~$(lsb_release -sc)"   # pick from the list above
+CEPH_UPGRADE_VERSION="20.2.4-1~$(lsb_release -sc)"   # confirm this exact string against the madison output above
 ```
 
 **2. Prevent rebalancing churn** while daemons briefly restart (from any node):
