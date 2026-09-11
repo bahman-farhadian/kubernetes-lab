@@ -1,4 +1,4 @@
-# 15. Day-2 Operations
+# 16. Day-2 Operations
 
 **Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in step 08 to a newer pinned version.
 
@@ -69,6 +69,28 @@ Repeat per worker, one at a time — never drain two simultaneously on a 3-node 
 **5. Verify:**
 ```sh
 kubectl get nodes -o wide   # every node on the new version, all Ready
+```
+
+## Steps — Calico upgrade
+
+Deployed on `CALICO_DEPLOY_VERSION` (step 10). Operator-based installs upgrade by re-applying a newer operator manifest — you don't re-apply `custom-resources.yaml`, since that could reset your pod-CIDR/config back to its defaults; the operator reconciles the rest on its own.
+
+**1. Check the target release's notes** for anything manual (rare within the same major, but check) at [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases), then apply the new operator manifest:
+```sh
+CALICO_UPGRADE_VERSION=v3.32.2   # current stable as of 2026-09; reverify at the releases page above
+kubectl apply -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_UPGRADE_VERSION}/manifests/tigera-operator.yaml"
+```
+
+**2. Watch the rollout:**
+```sh
+kubectl get tigerastatus                  # waits for Available=True again
+kubectl get pods -n calico-system -w      # calico-node/typha pods cycling one at a time
+```
+
+**3. Verify:**
+```sh
+kubectl get nodes -o wide   # stay Ready throughout — Calico upgrades shouldn't drop existing pod networking
+kubectl get tigerastatus -o yaml | grep -A2 "reason: Success"
 ```
 
 ## Steps — etcd cluster upgrade
@@ -158,7 +180,7 @@ sudo ceph -s          # HEALTH_OK
 Light profile, external etcd.
 
 ## Prerequisites
-- [14-security-hardening.md](14-security-hardening.md)
+- [15-security-hardening.md](15-security-hardening.md)
 
 ## Next
-- [16-troubleshooting.md](16-troubleshooting.md)
+- [17-troubleshooting.md](17-troubleshooting.md)

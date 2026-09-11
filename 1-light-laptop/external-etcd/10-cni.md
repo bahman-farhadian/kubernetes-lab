@@ -2,7 +2,7 @@
 
 **Goal:** Install a CNI plugin so nodes go `Ready` and pods get networking.
 
-**Choice:** Calico — supports `NetworkPolicy` (used in [14-security-hardening.md](14-security-hardening.md)) and matches the `192.168.0.0/16` pod CIDR set in step 08.
+**Choice:** Calico — supports `NetworkPolicy` (used in [15-security-hardening.md](15-security-hardening.md)) and matches the `192.168.0.0/16` pod CIDR set in step 08.
 
 ## Steps
 

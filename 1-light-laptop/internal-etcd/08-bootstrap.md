@@ -4,7 +4,7 @@
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](../../00-overview.md#version-pinning-and-the-upgrade-exercise) — so [15-day2-operations.md](15-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](../../00-overview.md#version-pinning-and-the-upgrade-exercise) — so [16-day2-operations.md](16-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -54,6 +54,31 @@ sudo kubectl -n kube-system exec etcd-k8s-ctrl-1 -- etcdctl \
   member list
 ```
 Expect 3 members, all `started`. Nodes stay `NotReady` until [10-cni.md](10-cni.md) — expected at this point.
+
+**5. Set up `kubectl` access from `k8s-bastion` and your workstation** — `10.0.1.0/24` generally isn't reachable directly from outside, so the bastion is the intended jump point; don't rely on `k8s-ctrl-1` alone for day-to-day access.
+
+On `k8s-bastion` — same Kubernetes apt repo as the cluster nodes (step 1), `kubectl` only, no `kubelet`/`kubeadm`:
+```sh
+sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}
+sudo apt-mark hold kubectl
+mkdir -p ~/.kube
+scp k8s-ctrl-1:.kube/config ~/.kube/config
+chmod 600 ~/.kube/config
+kubectl get nodes   # confirm it works from the bastion
+```
+
+On your workstation (outside the lab's VMs entirely):
+1. Copy the same kubeconfig down through the bastion, e.g. `scp k8s-bastion:.kube/config ~/.kube/config`.
+2. Install `kubectl` locally, matching `KUBE_DEPLOY_MINOR` (client skew of ±1 minor from the server is fine, but staying aligned means you never have to think about it):
+   - Linux: `curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBE_DEPLOY_VERSION%%-*}/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/`
+   - macOS: `brew install kubectl`, or the same `curl` pattern with `darwin/amd64`/`darwin/arm64`
+   - Windows: see [kubernetes.io/docs/tasks/tools/install-kubectl-windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/)
+3. The apiserver VIP (`10.0.1.10:6443`) is only reachable from inside `10.0.1.0/24` — tunnel through the bastion rather than pointing the kubeconfig at an address your workstation can't route to:
+   ```sh
+   ssh -N -L 6443:10.0.1.10:6443 <user>@<bastion-reachable-address> &
+   ```
+   Then edit the kubeconfig's `server:` line to `https://127.0.0.1:6443`. kubeadm's default apiserver certificate includes `localhost`/`127.0.0.1` as SANs, so this works without regenerating certs — verify if you want to be sure: `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text | grep -A1 "Subject Alternative Name"` on `k8s-ctrl-1`.
+4. Verify: `kubectl get nodes` from your workstation, through the tunnel.
 
 ## Bootstrap sequence
 

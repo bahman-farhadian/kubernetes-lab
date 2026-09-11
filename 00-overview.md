@@ -31,26 +31,26 @@ These are settled for the whole manual — later steps assume them rather than r
 | OS | Debian 13 ("Trixie") on every VM |
 | Bootstrap tool | `kubeadm` (not k3s/RKE2/Kubespray) |
 | Container runtime | containerd only |
-| CNI | Calico (NetworkPolicy support, needed in each directory's `14-security-hardening.md`, e.g. [1-light-laptop/internal-etcd/14-security-hardening.md](1-light-laptop/internal-etcd/14-security-hardening.md)) |
+| CNI | Calico (NetworkPolicy support, needed in each directory's `15-security-hardening.md`, e.g. [1-light-laptop/internal-etcd/15-security-hardening.md](1-light-laptop/internal-etcd/15-security-hardening.md)) |
 | Storage | Ceph, installed as native `apt` packages on the OS (not Rook) + Ceph-CSI inside the cluster |
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
 | Monitoring | node_exporter on every node + Prometheus/Grafana as native OS packages, outside the cluster so cluster problems don't take monitoring down with them (dedicated `k8s-monitor` VM on Light; folded into `k8s-bastion` on Heavy/GPU — budget-dependent, see [02-hardware-inventory.md](02-hardware-inventory.md)) |
-| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (planned as `17-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)) |
+| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)) |
 | Container-count philosophy | Prefer a host-installed daemon over an in-cluster operator/pod wherever both exist (this is why Ceph and monitoring live outside Kubernetes) |
 
 ## Version pinning and the upgrade exercise
 
 Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `ceph-*`, `etcd-*`, `prometheus*`, `grafana`, …) is installed at an **exact pinned version** (`apt install pkg=<version>`, never a bare `apt install pkg`) and `apt-mark hold`ed right after. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you.
 
-This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `15-day2-operations.md` (e.g. [1-light-laptop/internal-etcd/15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. Staying current matters here, not just as an exercise: an untouched cluster silently ages out of its security-support window. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
+This pinning is deliberate for a second reason, not just safety: **Kubernetes, Ceph, and Calico are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 10 for Calico, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `16-day2-operations.md` (e.g. [1-light-laptop/internal-etcd/16-day2-operations.md](1-light-laptop/internal-etcd/16-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node (Calico has no apt package/hold, but the same "deploy old, upgrade deliberately" shape applies via its operator manifest version). Staying current matters here, not just as an exercise: an untouched cluster silently ages out of its security-support window. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
 
-**Checked 2026-09** (Kubernetes has no LTS track — it ships a new minor roughly every 4 months and supports the 3 most recent; Ceph ships a new stable release roughly once a year, in support until the next-next one ships):
+**Checked 2026-09** (Kubernetes has no LTS track — it ships a new minor roughly every 4 months and supports the 3 most recent; Ceph ships a new stable release roughly once a year, in support until the next-next one ships; Calico ships patch releases frequently within a minor):
 
 | Component | Deploy version | Upgrade-to version | Source |
 |---|---|---|---|
 | Kubernetes | v1.36 (latest patch 1.36.4) | v1.37 (current stable, released 2026-08-26) | [kubernetes.io/releases](https://kubernetes.io/releases/) |
 | Ceph | Squid v19.x (latest 19.2.6) — **EOL 2026-10-31**, don't linger on it | Tentacle v20.x (latest 20.2.4) | [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) |
-| Calico (not part of the upgrade exercise, just the initial pin) | — | v3.32.2 | [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases) |
+| Calico | v3.31.7 (one minor behind) | v3.32.2 (current stable) | [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases) |
 
 Re-check all three before you actually run the steps — this table is a snapshot, not a promise. Debian 13/Trixie's own `ceph-common` (`18.2.7+ds-1+deb13u1`, Reef) is already past Reef's upstream end of life, and Ceph's official [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) rate Debian 13 tier "C" (packages exist, untested by the Ceph project) — [11-storage-ceph.md](1-light-laptop/internal-etcd/11-storage-ceph.md) has the fallback plan if `download.ceph.com`'s Trixie repo doesn't cooperate.
 

@@ -1,6 +1,6 @@
 # Heavy — Internal (Stacked) etcd
 
-**Status:** Not started. Per the [rollout plan](../../README.md#rollout-plan), this profile is built only after **Light** (`../../1-light-laptop/internal-etcd/`) has been deployed and validated end to end, including the upgrade exercise in its `15-day2-operations.md`.
+**Status:** Not started. Per the [rollout plan](../../README.md#rollout-plan), this profile is built only after **Light** (`../../1-light-laptop/internal-etcd/`) has been deployed and validated end to end, including the upgrade exercise in its `16-day2-operations.md`.
 
 ## How to build this out
 

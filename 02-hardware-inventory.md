@@ -63,7 +63,7 @@ Same reconciliation rules as Scenario A: RAM caps exactly at 32 GB (25 + 7), vCP
 
 ## Server — Heavy and GPU profiles
 
-Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, planned as `17-gpu-node.md` in each `3-gpu-server/` scenario directory (see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
+Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory (see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
 
 ### Heavy — Scenario A (Stacked etcd)
 
@@ -95,7 +95,7 @@ Everything in Heavy above, plus:
 
 The GPU profile is the only one that fully commits the box's budget (VM totals + host reserved = PC totals, no slack) — one more reason to bring Heavy up cleanly first.
 
-`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: planned as `17-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md).
+`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md).
 
 ### Heavy/GPU — Scenario B (External etcd)
 

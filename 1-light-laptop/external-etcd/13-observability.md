@@ -72,4 +72,4 @@ Light profile, external etcd.
 - [12-ingress.md](12-ingress.md)
 
 ## Next
-- [14-security-hardening.md](14-security-hardening.md)
+- [14-smoke-test.md](14-smoke-test.md)

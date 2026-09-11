@@ -1,4 +1,4 @@
-# 14. Security Hardening
+# 15. Security Hardening
 
 **Goal:** Move the cluster from "working" to "defensible."
 
@@ -15,7 +15,7 @@
 Light profile, external etcd.
 
 ## Prerequisites
-- [13-observability.md](13-observability.md)
+- [14-smoke-test.md](14-smoke-test.md)
 
 ## Next
-- [15-day2-operations.md](15-day2-operations.md)
+- [16-day2-operations.md](16-day2-operations.md)
