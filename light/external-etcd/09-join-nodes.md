@@ -4,7 +4,7 @@
 
 ## Steps
 
-**1. On each worker** — same Kubernetes apt repo **and the same exact `KUBE_DEPLOY_VERSION`** as the control-plane nodes ([08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) step 1) — every node in the cluster starts on the identical pinned patch version, no exceptions. `kubelet` + `kubeadm` only (`kubectl` isn't needed on workers for this lab):
+**1. On each worker** — same Kubernetes apt repo **and the same exact `KUBE_DEPLOY_VERSION`** as the control-plane nodes ([08-bootstrap.md](08-bootstrap.md) step 5) — every node in the cluster starts on the identical pinned patch version, no exceptions. `kubelet` + `kubeadm` only (`kubectl` isn't needed on workers for this lab):
 ```sh
 sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubelet kubeadm
@@ -36,10 +36,10 @@ flowchart LR
 ```
 
 ## Applies to
-Both scenarios.
+Light profile, either etcd scenario.
 
 ## Prerequisites
-- [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) or [08-external-etcd-bootstrap.md](08-external-etcd-bootstrap.md)
+- [08-bootstrap.md](08-bootstrap.md)
 
 ## Next
 - [10-cni.md](10-cni.md)

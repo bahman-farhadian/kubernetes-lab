@@ -1,9 +1,9 @@
 # 05. OS Baseline
 
-**Goal:** Bring every VM (bastion, control-plane, etcd, workers) to a common, Kubernetes-ready OS state.
+**Goal:** Bring every VM (bastion, control-plane, workers, monitor) to a common, Kubernetes-ready OS state.
 
 ## Applies to
-All nodes, both scenarios (bastion and `k8s-monitor` included).
+All nodes: `k8s-bastion`, `k8s-ctrl-1/2/3`, `k8s-work-1/2/3`, `k8s-monitor`.
 
 ## Steps
 
@@ -22,7 +22,6 @@ Append the full inventory to `/etc/hosts` on **every** node (same block everywhe
 10.0.1.23  k8s-work-3
 10.0.1.31  k8s-monitor
 ```
-(Add the `k8s-etcd-*` lines too if you're on Scenario B.)
 
 **2. Disable swap** — Kubernetes refuses to start with swap on:
 ```sh
@@ -30,7 +29,7 @@ sudo swapoff -a
 sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab
 ```
 
-**3. Kernel modules + sysctl** — required on control-plane, etcd, and worker nodes (skip on bastion/monitor):
+**3. Kernel modules + sysctl** — required on control-plane and worker nodes (skip on bastion/monitor):
 ```sh
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 overlay
@@ -51,7 +50,7 @@ sudo sysctl --system
 timedatectl status | grep "synchronized"
 ```
 
-**5. Firewall** — this lab uses the port list from [03-network-plan.md](03-network-plan.md). If `nftables`/`ufw` is active, open those ports between nodes; otherwise leave the host firewall disabled and rely on network-level isolation (this is a lab, not exposed to the internet).
+**5. Firewall** — this lab uses the port list from [03-network-plan.md](../../03-network-plan.md). If `nftables`/`ufw` is active, open those ports between nodes; otherwise leave the host firewall disabled and rely on network-level isolation (this is a lab, not exposed to the internet).
 
 **6. Base packages + full upgrade**, then hold nothing here yet (no cluster packages installed in this step):
 ```sh

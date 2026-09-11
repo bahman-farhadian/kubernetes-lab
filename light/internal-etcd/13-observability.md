@@ -2,11 +2,11 @@
 
 **Goal:** Get metrics and logs flowing before relying on the cluster for anything.
 
-**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on one monitoring host: the dedicated `k8s-monitor` VM on **Light**, or `k8s-bastion` itself on **Heavy**/**GPU** (no budget headroom for a separate VM there — see [02-hardware-inventory.md](02-hardware-inventory.md)). Steps below say `k8s-monitor`; substitute `k8s-bastion` if you're on Heavy or GPU. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
+**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](../../00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on the dedicated `k8s-monitor` VM. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
 
 ## Steps
 
-**1. `node_exporter` on every node** — bastion, control-plane, etcd (Scenario B), workers, and `k8s-monitor` itself, same pinned version everywhere:
+**1. `node_exporter` on every node** — bastion, control-plane, workers, and `k8s-monitor` itself, same pinned version everywhere:
 ```sh
 sudo apt update
 apt-cache madison prometheus-node-exporter   # list exact available versions — pick one
@@ -33,11 +33,11 @@ scrape_configs:
           - 10.0.1.11:9100   # k8s-bastion
           - 10.0.1.12:9100   # k8s-ctrl-1
           - 10.0.1.13:9100   # k8s-ctrl-2
-          - 10.0.1.14:9100   # k8s-ctrl-3 (Scenario A) / or k8s-etcd-1..3 (Scenario B)
+          - 10.0.1.14:9100   # k8s-ctrl-3
           - 10.0.1.21:9100   # k8s-work-1
           - 10.0.1.22:9100   # k8s-work-2
           - 10.0.1.23:9100   # k8s-work-3
-          - 10.0.1.31:9100   # k8s-monitor itself (Light only) — omit this line on Heavy/GPU; GPU adds 10.0.1.24:9100 (k8s-work-4) instead
+          - 10.0.1.31:9100   # k8s-monitor itself
 ```
 ```sh
 sudo systemctl restart prometheus
@@ -64,7 +64,7 @@ sudo systemctl enable --now grafana-server
 > "Storage" here is host-level disk usage via `node_exporter`'s filesystem collector, not Ceph cluster internals (pool usage, PG state, OSD latency). Ceph ships its own `prometheus` `mgr` module (`ceph mgr module enable prometheus`) if you want that scraped later — out of scope for this pass since it wasn't asked for.
 
 ## Applies to
-Both scenarios.
+Light profile, either etcd scenario.
 
 ## Prerequisites
 - [12-ingress.md](12-ingress.md)

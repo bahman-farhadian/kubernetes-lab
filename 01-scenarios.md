@@ -2,17 +2,19 @@
 
 **Goal:** Pick a control-plane/etcd topology before provisioning VMs, since it changes the node count and the bootstrap steps you'll follow later.
 
-## Scenario A — Stacked etcd
+Each scenario has its own directory under every profile — `internal-etcd/` for Scenario A, `external-etcd/` for Scenario B (see [README.md](README.md#layout)). The two names are interchangeable throughout this repo.
+
+## Scenario A — Stacked etcd (`internal-etcd/`)
 - etcd runs co-located on each control-plane node (standard `kubeadm` HA topology).
 - 3 control-plane nodes (odd count, required for etcd quorum).
 - Simpler: fewer VMs, one bootstrap path, etcd and apiserver fail together per node.
-- Bootstrap doc: [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md).
+- Bootstrap doc: `08-bootstrap.md` in whichever profile's `internal-etcd/` directory you're deploying, e.g. [light/internal-etcd/08-bootstrap.md](light/internal-etcd/08-bootstrap.md).
 
-## Scenario B — External (dedicated) etcd
+## Scenario B — External (dedicated) etcd (`external-etcd/`)
 - etcd runs on its own VMs, independent of the control-plane nodes.
 - 3 dedicated etcd nodes (odd count, still required for quorum) + 2 control-plane nodes (apiserver is stateless, so it doesn't need quorum and can run on fewer nodes).
 - More VMs and moving parts, but control-plane and etcd fail independently, and each can be scaled/replaced on its own.
-- Bootstrap doc: [08-external-etcd-bootstrap.md](08-external-etcd-bootstrap.md).
+- Bootstrap doc: `08-bootstrap.md` in whichever profile's `external-etcd/` directory you're deploying, e.g. [light/external-etcd/08-bootstrap.md](light/external-etcd/08-bootstrap.md).
 
 ## Topology diagrams
 

@@ -9,10 +9,10 @@
 - etcd encryption at rest (`EncryptionConfiguration` for Secrets)
 - CIS Kubernetes Benchmark notes relevant to this lab
 - Bastion SSH hardening (key-only auth, no root login)
-- Confirm every held package from earlier steps (`apt-mark showhold` on each node) still matches [00-overview.md](00-overview.md)'s package hold policy
+- Confirm every held package from earlier steps (`apt-mark showhold` on each node) still matches [00-overview.md](../../00-overview.md)'s package hold policy
 
 ## Applies to
-Both scenarios.
+Light profile, either etcd scenario.
 
 ## Prerequisites
 - [13-observability.md](13-observability.md)

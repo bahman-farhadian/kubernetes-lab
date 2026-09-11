@@ -1,9 +1,9 @@
 # 06. Container Runtime
 
-**Goal:** Install and configure the container runtime on control-plane, etcd (if applicable), and worker nodes.
+**Goal:** Install and configure the container runtime on control-plane and worker nodes.
 
 ## Applies to
-Control-plane and worker nodes, both scenarios. Not required on etcd-only nodes (Scenario B), the bastion, or `k8s-monitor`.
+`k8s-ctrl-1/2/3` and `k8s-work-1/2/3`. Not required on the bastion or `k8s-monitor`.
 
 ## Steps
 

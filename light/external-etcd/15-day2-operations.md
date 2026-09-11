@@ -1,12 +1,12 @@
 # 15. Day-2 Operations
 
-**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 08–11 to a newer pinned version.
+**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in step 08 to a newer pinned version.
 
-**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `ceph-*`, `etcd-*`, `prometheus*`, `grafana`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
+**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `etcd-*`, `ceph-*`, `prometheus*`, `grafana`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
 
 ## Steps — Kubernetes minor upgrade
 
-Deployed on `KUBE_DEPLOY_VERSION` (steps 08/09). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/).
+Deployed on `KUBE_DEPLOY_VERSION` (step 08). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane node → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). This scenario's apiserver is stateless (external etcd), but `kubeadm upgrade` still walks the same control-plane component set on each node.
 
 **1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
 ```sh
@@ -34,7 +34,7 @@ sudo apt-mark hold kubelet kubectl
 sudo systemctl daemon-reload && sudo systemctl restart kubelet
 ```
 
-**3. Remaining control-plane nodes** (`k8s-ctrl-2`/`3`, or just `k8s-ctrl-2` on Scenario B) — same repo switch as step 1, then per node:
+**3. `k8s-ctrl-2`** — the only other control-plane node in this scenario:
 ```sh
 sudo apt-mark unhold kubeadm
 sudo apt install -y kubeadm=${KUBE_UPGRADE_VERSION}
@@ -70,6 +70,30 @@ Repeat per worker, one at a time — never drain two simultaneously on a 3-node 
 ```sh
 kubectl get nodes -o wide   # every node on the new version, all Ready
 ```
+
+## Steps — etcd cluster upgrade
+
+Unlike the internal-etcd scenario (where `kubeadm upgrade` also bumps etcd's static-pod image), this etcd is a plain apt package independent of Kubernetes' own version — it needs its own upgrade, same "one node at a time, verify quorum" discipline as Ceph mons below.
+
+**1. Pick a new pinned version** (on `k8s-etcd-1`):
+```sh
+sudo apt update
+apt-cache madison etcd-server
+ETCD_UPGRADE_VERSION="<version from the list above>"
+```
+
+**2. Upgrade one node at a time, verifying quorum before moving to the next:**
+```sh
+sudo apt-mark unhold etcd-server etcd-client
+sudo apt install -y etcd-server=${ETCD_UPGRADE_VERSION} etcd-client=${ETCD_UPGRADE_VERSION}
+sudo apt-mark hold etcd-server etcd-client
+sudo systemctl restart etcd
+
+etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1.17:2379 \
+  --cacert=/etc/etcd/pki/ca.pem --cert=/etc/etcd/pki/k8s-etcd-1.pem --key=/etc/etcd/pki/k8s-etcd-1-key.pem \
+  endpoint health --cluster
+```
+Repeat on `k8s-etcd-2`, then `k8s-etcd-3`. A mixed-version quorum mid-rollout is expected and safe, same as Ceph mons below.
 
 ## Steps — Ceph release upgrade
 
@@ -126,12 +150,12 @@ sudo ceph -s          # HEALTH_OK
 ```
 
 ## Also covers
-- etcd backup and restore (member list differs by scenario — see [stacked](08-stacked-etcd-bootstrap.md)/[external](08-external-etcd-bootstrap.md))
+- etcd backup and restore: `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec` needed, unlike the internal-etcd scenario — this etcd is a plain systemd service)
 - Adding/removing control-plane, etcd, and worker nodes
-- Certificate rotation
+- Certificate rotation (etcd's own CA from [08-bootstrap.md](08-bootstrap.md) step 2, separate from Kubernetes' PKI)
 
 ## Applies to
-Both scenarios (etcd backup/restore procedure differs slightly by topology).
+Light profile, external etcd.
 
 ## Prerequisites
 - [14-security-hardening.md](14-security-hardening.md)

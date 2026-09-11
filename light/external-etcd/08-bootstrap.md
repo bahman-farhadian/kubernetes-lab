@@ -1,10 +1,10 @@
-# 08. Bootstrap — External etcd (Scenario B)
+# 08. Bootstrap — External etcd
 
 **Goal:** Stand up an independent etcd cluster, then initialize the control plane against it.
 
 ## Steps
 
-Etcd here runs as a native systemd service on `k8s-etcd-1/2/3` (no kubelet/containerd on these nodes — keeps them outside the "less containers" tradeoff entirely, per [00-overview.md](00-overview.md)).
+Etcd here runs as a native systemd service on `k8s-etcd-1/2/3` (no kubelet/containerd on these nodes — keeps them outside the "less containers" tradeoff entirely, per [00-overview.md](../../00-overview.md)).
 
 **1. Install a pinned etcd version on `k8s-etcd-1/2/3`** (verify the exact package name first — Debian splits it as `etcd-server`/`etcd-client` on recent releases), same version on all three:
 ```sh
@@ -61,7 +61,23 @@ etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1
 ```
 All 3 must report healthy before continuing.
 
-**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — same repo setup and **same exact pinned `KUBE_DEPLOY_VERSION`** as Scenario A (see [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md) step 1 — deliberately one minor behind current stable so there's a real upgrade to practice in [15-day2-operations.md](15-day2-operations.md)), then copy the etcd CA + a client cert/key from step 2 onto `k8s-ctrl-1` (e.g. `/etc/kubernetes/pki/etcd/{ca,client,client-key}.pem`).
+**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — deliberately one minor behind current stable so [15-day2-operations.md](15-day2-operations.md) has a real upgrade to practice:
+```sh
+KUBE_DEPLOY_MINOR=v1.33   # deploy minor: one behind current stable — check kubernetes.io/releases
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt update
+
+apt-cache madison kubeadm   # list exact available patch versions in this minor — pick one
+KUBE_DEPLOY_VERSION="1.33.x-1.1"   # replace x with the patch you picked from the list above
+
+sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION} kubectl=${KUBE_DEPLOY_VERSION}
+sudo apt-mark hold kubelet kubeadm kubectl
+```
+Use the **same** `KUBE_DEPLOY_VERSION` on both control-plane nodes. Then copy the etcd CA + a client cert/key from step 2 onto `k8s-ctrl-1` (e.g. `/etc/kubernetes/pki/etcd/{ca,client,client-key}.pem`).
 
 **6. `kubeadm init` on `k8s-ctrl-1`** pointing at the external etcd cluster, with `--kubernetes-version` pinned to match the packages installed in step 5:
 ```sh
@@ -75,8 +91,14 @@ sudo kubeadm init \
   --external-etcd-certfile /etc/kubernetes/pki/etcd/client.pem \
   --external-etcd-keyfile /etc/kubernetes/pki/etcd/client-key.pem
 ```
+Save the two `kubeadm join` commands it prints. Then, still on `k8s-ctrl-1`:
+```sh
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
 
-**7. On `k8s-ctrl-2`** — run the `--control-plane` join command printed by step 6 (same caveat as Scenario A: `--certificate-key` expires after 2 hours).
+**7. On `k8s-ctrl-2`** — run the `--control-plane` join command printed by step 6 (`--certificate-key` expires after 2 hours; regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs` if needed).
 
 ## Bootstrap sequence
 
@@ -106,11 +128,11 @@ flowchart TB
 ```
 
 ## Applies to
-Scenario B only.
+Light profile, external etcd only.
 
 ## Prerequisites
 - [07-load-balancer.md](07-load-balancer.md)
-- [02-hardware-inventory.md](02-hardware-inventory.md) — Scenario B table
+- [02-hardware-inventory.md](../../02-hardware-inventory.md) — Laptop / Light profile, Scenario B table
 
 ## Next
 - [09-join-nodes.md](09-join-nodes.md)

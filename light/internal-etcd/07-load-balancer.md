@@ -27,10 +27,9 @@ backend k8s-apiserver-backend
     balance roundrobin
     server k8s-ctrl-1 10.0.1.12:6443 check fall 3 rise 2
     server k8s-ctrl-2 10.0.1.13:6443 check fall 3 rise 2
-    # Scenario A only:
     server k8s-ctrl-3 10.0.1.14:6443 check fall 3 rise 2
 ```
-Drop the `k8s-ctrl-3` line on Scenario B (2 control-plane nodes only). `10.0.1.10` is the VIP clients and `kubeadm` will target — see [03-network-plan.md](03-network-plan.md).
+`10.0.1.10` is the VIP clients and `kubeadm` will target — see [03-network-plan.md](../../03-network-plan.md).
 
 **3. Apply and verify:**
 ```sh
@@ -38,10 +37,10 @@ sudo haproxy -c -f /etc/haproxy/haproxy.cfg
 sudo systemctl restart haproxy
 sudo systemctl enable haproxy
 ```
-The backend checks will show all control-plane servers as `DOWN` until step 08 actually starts the apiserver on them — that's expected at this point.
+The backend checks will show all three control-plane servers as `DOWN` until step 08 actually starts the apiserver on them — that's expected at this point.
 
 ## Applies to
-Both scenarios — the bastion always load-balances across the control-plane nodes (3 in Scenario A, 2 in Scenario B).
+Light profile, internal (stacked) etcd — the bastion load-balances across all 3 control-plane nodes.
 
 ## Request path
 
@@ -51,7 +50,7 @@ flowchart LR
     VIP --> HAP["HAProxy on k8s-bastion"]:::bastion
     HAP --> C1["k8s-ctrl-1"]:::controlPlane
     HAP --> C2["k8s-ctrl-2"]:::controlPlane
-    HAP -.-> C3["k8s-ctrl-3\n(Scenario A only)"]:::controlPlane
+    HAP --> C3["k8s-ctrl-3"]:::controlPlane
 
     classDef bastion fill:#1f6feb,stroke:#0c2d6b,color:#ffffff
     classDef controlPlane fill:#8250df,stroke:#4b1f91,color:#ffffff
@@ -64,5 +63,4 @@ flowchart LR
 - [06-container-runtime.md](06-container-runtime.md) (bastion itself doesn't need a container runtime, but control-plane targets must be reachable)
 
 ## Next
-- Scenario A: [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md)
-- Scenario B: [08-external-etcd-bootstrap.md](08-external-etcd-bootstrap.md)
+- [08-bootstrap.md](08-bootstrap.md)

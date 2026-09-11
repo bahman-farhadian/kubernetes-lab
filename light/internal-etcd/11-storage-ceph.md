@@ -1,10 +1,10 @@
 # 11. Storage — Ceph (native) + Ceph-CSI
 
-**Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
+**Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](../../00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
 
-Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](02-hardware-inventory.md).
+Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](../../02-hardware-inventory.md).
 
-Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later. So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-stacked-etcd-bootstrap.md](08-stacked-etcd-bootstrap.md)), so [15-day2-operations.md](15-day2-operations.md) has a real Ceph upgrade to walk through.
+Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later. So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-bootstrap.md](08-bootstrap.md)), so [15-day2-operations.md](15-day2-operations.md) has a real Ceph upgrade to walk through.
 
 ## Steps — native Ceph cluster (run on `k8s-work-1/2/3`)
 
@@ -147,7 +147,7 @@ flowchart TB
 ```
 
 ## Applies to
-Both scenarios (storage layout is identical — only control-plane/etcd topology differs between scenarios).
+Light profile, either etcd scenario (storage layout is identical — only control-plane/etcd topology differs between scenarios).
 
 ## Prerequisites
 - [10-cni.md](10-cni.md)

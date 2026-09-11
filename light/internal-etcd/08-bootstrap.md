@@ -1,10 +1,10 @@
-# 08. Bootstrap — Stacked etcd (Scenario A)
+# 08. Bootstrap — Internal (Stacked) etcd
 
 **Goal:** Initialize the HA control plane with `kubeadm`, etcd stacked on each control-plane node.
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [15-day2-operations.md](15-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](../../00-overview.md#version-pinning-and-the-upgrade-exercise) — so [15-day2-operations.md](15-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
 KUBE_DEPLOY_MINOR=v1.33   # deploy minor: one behind current stable — check kubernetes.io/releases
 sudo mkdir -p /etc/apt/keyrings
@@ -82,11 +82,11 @@ flowchart TB
 ```
 
 ## Applies to
-Scenario A only.
+Light profile, internal (stacked) etcd only.
 
 ## Prerequisites
 - [07-load-balancer.md](07-load-balancer.md)
-- [02-hardware-inventory.md](02-hardware-inventory.md) — Scenario A table
+- [02-hardware-inventory.md](../../02-hardware-inventory.md) — Laptop / Light profile, Scenario A table
 
 ## Next
 - [09-join-nodes.md](09-join-nodes.md)
