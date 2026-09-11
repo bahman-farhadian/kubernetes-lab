@@ -3,7 +3,7 @@
 **Goal:** Record the exact pinned versions actually used each time a profile is deployed or upgraded. The steps in this repo use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …) rather than hardcoded numbers — this doc is where the concrete values you picked for a given run actually live, since [00-overview.md](00-overview.md) can't record them for you.
 
 ## Applies to
-All profiles and both etcd scenarios. Add one new row per deploy and per upgrade — don't overwrite previous rows, the history is the point (it's what makes each directory's `15-day2-operations.md` upgrade exercise checkable afterward, e.g. [light/internal-etcd/15-day2-operations.md](light/internal-etcd/15-day2-operations.md): what did we run, what did we upgrade to, when).
+All profiles and both etcd scenarios. Add one new row per deploy and per upgrade — don't overwrite previous rows, the history is the point (it's what makes each directory's `15-day2-operations.md` upgrade exercise checkable afterward, e.g. [1-light-laptop/internal-etcd/15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md): what did we run, what did we upgrade to, when).
 
 ## How to use this doc
 

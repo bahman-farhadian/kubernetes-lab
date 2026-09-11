@@ -16,9 +16,9 @@ Named so a run and its docs/logs can be referred to unambiguously — always say
 
 | Profile | Host | Nodes | Directory |
 |---|---|---|---|
-| **Light** | Laptop | bastion, 3 control-plane, 3 workers, monitor | `light/` |
-| **Heavy** | Server | bastion, 3 control-plane, 3 workers — same shape as Light, bigger nodes, no separate monitor VM | `heavy/` |
-| **GPU** | Server | Heavy + `k8s-work-4` (NVIDIA, passed-through, tainted) | `gpu/` |
+| **Light** | Laptop | bastion, 3 control-plane, 3 workers, monitor | `1-light-laptop/` |
+| **Heavy** | Server | bastion, 3 control-plane, 3 workers — same shape as Light, bigger nodes, no separate monitor VM | `2-heavy-server/` |
+| **GPU** | Server | Heavy + `k8s-work-4` (NVIDIA, passed-through, tainted) | `3-gpu-server/` |
 
 Each profile directory has two subdirectories, `internal-etcd/` and `external-etcd/` — see [README.md](README.md#layout) for the full tree and [01-scenarios.md](01-scenarios.md) for what the two etcd scenarios mean. Full sizing for each profile × scenario: [02-hardware-inventory.md](02-hardware-inventory.md). **Deploy in this order: Light first (both scenarios), then Heavy, then GPU** — see [README.md](README.md#rollout-plan) for current status. Record the exact pinned versions used for each profile's run in [18-deployment-log.md](18-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
 
@@ -31,18 +31,18 @@ These are settled for the whole manual — later steps assume them rather than r
 | OS | Debian 13 ("Trixie") on every VM |
 | Bootstrap tool | `kubeadm` (not k3s/RKE2/Kubespray) |
 | Container runtime | containerd only |
-| CNI | Calico (NetworkPolicy support, needed in each directory's `14-security-hardening.md`, e.g. [light/internal-etcd/14-security-hardening.md](light/internal-etcd/14-security-hardening.md)) |
+| CNI | Calico (NetworkPolicy support, needed in each directory's `14-security-hardening.md`, e.g. [1-light-laptop/internal-etcd/14-security-hardening.md](1-light-laptop/internal-etcd/14-security-hardening.md)) |
 | Storage | Ceph, installed as native `apt` packages on the OS (not Rook) + Ceph-CSI inside the cluster |
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
 | Monitoring | node_exporter on every node + Prometheus/Grafana as native OS packages, outside the cluster so cluster problems don't take monitoring down with them (dedicated `k8s-monitor` VM on Light; folded into `k8s-bastion` on Heavy/GPU — budget-dependent, see [02-hardware-inventory.md](02-hardware-inventory.md)) |
-| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (planned as `17-gpu-node.md` in each `gpu/` scenario directory — see [gpu/internal-etcd/README.md](gpu/internal-etcd/README.md)) |
+| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there (planned as `17-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)) |
 | Container-count philosophy | Prefer a host-installed daemon over an in-cluster operator/pod wherever both exist (this is why Ceph and monitoring live outside Kubernetes) |
 
 ## Version pinning and the upgrade exercise
 
 Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `ceph-*`, `etcd-*`, `prometheus*`, `grafana`, …) is installed at an **exact pinned version** (`apt install pkg=<version>`, never a bare `apt install pkg`) and `apt-mark hold`ed right after. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you.
 
-This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `15-day2-operations.md` (e.g. [light/internal-etcd/15-day2-operations.md](light/internal-etcd/15-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
+This pinning is deliberate for a second reason, not just safety: **Kubernetes and Ceph are each deployed one version behind current stable** (steps 08/09 for Kubernetes, step 11 for Ceph, in every profile/scenario directory), specifically so there's a real version to upgrade *to*. Each directory's own `15-day2-operations.md` (e.g. [1-light-laptop/internal-etcd/15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md)) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
 
 ## Diagram color legend
 

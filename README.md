@@ -21,22 +21,25 @@ General, host/scenario-agnostic reference lives at the repo root:
 Everything from step 04 onward is **profile- and scenario-specific**, so it lives in its own directory instead of the repo root:
 
 ```
-light/   internal-etcd/   (Laptop, 3 stacked control-plane nodes)
-         external-etcd/   (Laptop, 2 control-plane + 3 dedicated etcd)
-heavy/   internal-etcd/   (Server, same shape as Light, bigger nodes)
-         external-etcd/
-gpu/     internal-etcd/   (Server, Heavy + a tainted NVIDIA worker)
-         external-etcd/
+1-light-laptop/
+  internal-etcd/   (Laptop, 3 stacked control-plane nodes)
+  external-etcd/   (Laptop, 2 control-plane + 3 dedicated etcd)
+2-heavy-server/
+  internal-etcd/   (Server, same shape as Light, bigger nodes)
+  external-etcd/
+3-gpu-server/
+  internal-etcd/   (Server, Heavy + a tainted NVIDIA worker)
+  external-etcd/
 ```
 
-Each of those 6 directories is self-contained: `04-prerequisites.md` through `16-troubleshooting.md` (the `gpu/` ones also get a `17-gpu-node.md`), with real commands, real IPs, and no cross-directory conditionals — pick your directory once and everything in it applies as written. Start at that directory's `04-prerequisites.md` after reading the root docs above.
+Each of those 6 directories is self-contained: `04-prerequisites.md` through `16-troubleshooting.md` (the `3-gpu-server/` ones also get a `17-gpu-node.md`), with real commands, real IPs, and no cross-directory conditionals — pick your directory once and everything in it applies as written. Start at that directory's `04-prerequisites.md` after reading the root docs above.
 
 ```mermaid
 flowchart TD
     Root["Root docs\n00-03, 18"]:::common
-    Root --> Light["light/"]:::common
-    Root --> Heavy["heavy/"]:::common
-    Root --> GPU["gpu/"]:::common
+    Root --> Light["1-light-laptop/"]:::common
+    Root --> Heavy["2-heavy-server/"]:::common
+    Root --> GPU["3-gpu-server/"]:::common
 
     Light --> LI["internal-etcd/\n04–16"]:::scenarioA
     Light --> LE["external-etcd/\n04–16"]:::scenarioB
@@ -64,9 +67,9 @@ Three independent instances of this lab, never joined together (they reuse the s
 
 ## Rollout plan
 
-1. **Light (laptop) — current task.** Build and validate **both** etcd scenarios here first — [light/internal-etcd/](light/internal-etcd/) and [light/external-etcd/](light/external-etcd/) — since it's the smallest, cheapest place to shake out mistakes (including running each through [15-day2-operations.md](light/internal-etcd/15-day2-operations.md)'s upgrade exercise) before repeating the same steps on the server.
-2. **Heavy (server)** — once both Light scenarios are healthy end to end. [heavy/internal-etcd/](heavy/internal-etcd/) and [heavy/external-etcd/](heavy/external-etcd/) currently hold only a README explaining how to carry Light's (by-then proven) steps over, adjusted for the Heavy hardware numbers in [02-hardware-inventory.md](02-hardware-inventory.md).
-3. **GPU (server)** — add `k8s-work-4` and a `17-gpu-node.md` on top of a healthy Heavy deployment, rather than bootstrapping GPU from scratch. [gpu/internal-etcd/](gpu/internal-etcd/) and [gpu/external-etcd/](gpu/external-etcd/) are stubs for now, same as Heavy's.
+1. **Light (laptop) — current task.** Build and validate **both** etcd scenarios here first — [1-light-laptop/internal-etcd/](1-light-laptop/internal-etcd/) and [1-light-laptop/external-etcd/](1-light-laptop/external-etcd/) — since it's the smallest, cheapest place to shake out mistakes (including running each through [15-day2-operations.md](1-light-laptop/internal-etcd/15-day2-operations.md)'s upgrade exercise) before repeating the same steps on the server.
+2. **Heavy (server)** — once both Light scenarios are healthy end to end. [2-heavy-server/internal-etcd/](2-heavy-server/internal-etcd/) and [2-heavy-server/external-etcd/](2-heavy-server/external-etcd/) currently hold only a README explaining how to carry Light's (by-then proven) steps over, adjusted for the Heavy hardware numbers in [02-hardware-inventory.md](02-hardware-inventory.md).
+3. **GPU (server)** — add `k8s-work-4` and a `17-gpu-node.md` on top of a healthy Heavy deployment, rather than bootstrapping GPU from scratch. [3-gpu-server/internal-etcd/](3-gpu-server/internal-etcd/) and [3-gpu-server/external-etcd/](3-gpu-server/external-etcd/) are stubs for now, same as Heavy's.
 
 Record the exact pinned component versions used on each run in [18-deployment-log.md](18-deployment-log.md).
 
@@ -79,4 +82,4 @@ Two supported control-plane/etcd topologies, built into the directory layout abo
 
 ## Status
 
-[light/internal-etcd/](light/internal-etcd/) and [light/external-etcd/](light/external-etcd/) have real, runnable procedure (commands, configs, pinned-version installs) for steps 04–16; each directory's `16-troubleshooting.md` stays an outline until issues actually come up during a run-through. `heavy/` and `gpu/` are stubs pending the rollout plan above. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.
+[1-light-laptop/internal-etcd/](1-light-laptop/internal-etcd/) and [1-light-laptop/external-etcd/](1-light-laptop/external-etcd/) have real, runnable procedure (commands, configs, pinned-version installs) for steps 04–16; each directory's `16-troubleshooting.md` stays an outline until issues actually come up during a run-through. `2-heavy-server/` and `3-gpu-server/` are stubs pending the rollout plan above. Versions/URLs marked "verify current" throughout are deliberately not hardcoded — check them against upstream before running, don't trust them as pinned.
