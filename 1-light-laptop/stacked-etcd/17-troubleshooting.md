@@ -10,7 +10,7 @@
 - LB/VIP failover issues on the bastion
 
 ## Applies to
-Light profile, internal (stacked) etcd.
+Light profile, stacked etcd.
 
 ## Prerequisites
 - Populated as issues come up during deployment.

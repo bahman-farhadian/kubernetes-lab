@@ -40,7 +40,7 @@ sudo systemctl enable haproxy
 The backend checks will show all three control-plane servers as `DOWN` until step 08 actually starts the apiserver on them — that's expected at this point.
 
 ## Applies to
-Light profile, internal (stacked) etcd — the bastion load-balances across all 3 control-plane nodes.
+Light profile, stacked etcd — the bastion load-balances across all 3 control-plane nodes.
 
 ## Request path
 

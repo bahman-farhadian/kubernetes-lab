@@ -2,7 +2,7 @@
 
 **Goal:** Confirm every VM is in the expected starting state before any cluster-building step begins.
 
-> Continues from the root docs — read [00-overview.md](../../00-overview.md) through [03-network-plan.md](../../03-network-plan.md) first if you haven't. This directory is the **Light** profile, **internal (stacked) etcd** scenario — 3 control-plane nodes, etcd co-located on each, per [01-scenarios.md](../../01-scenarios.md).
+> Continues from the root docs — read [00-overview.md](../../00-overview.md) through [03-network-plan.md](../../03-network-plan.md) first if you haven't. This directory is the **Light** profile, **stacked etcd** scenario — 3 control-plane nodes, etcd co-located on each, per [01-scenarios.md](../../01-scenarios.md).
 
 ## Covers
 - Base OS: **Debian 13 ("Trixie")**, minimal/netinst install, fully updated (`apt update && apt full-upgrade`) before you start

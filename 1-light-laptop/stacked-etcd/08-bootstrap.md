@@ -1,4 +1,4 @@
-# 08. Bootstrap — Internal (Stacked) etcd
+# 08. Bootstrap — Stacked etcd
 
 **Goal:** Initialize the HA control plane with `kubeadm`, etcd stacked on each control-plane node.
 
@@ -107,7 +107,7 @@ flowchart TB
 ```
 
 ## Applies to
-Light profile, internal (stacked) etcd only.
+Light profile, stacked etcd only.
 
 ## Prerequisites
 - [07-load-balancer.md](07-load-balancer.md)

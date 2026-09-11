@@ -95,7 +95,7 @@ kubectl get tigerastatus -o yaml | grep -A2 "reason: Success"
 
 ## Steps — etcd cluster upgrade
 
-Unlike the internal-etcd scenario (where `kubeadm upgrade` also bumps etcd's static-pod image), this etcd is a plain apt package independent of Kubernetes' own version — it needs its own upgrade, same "one node at a time, verify quorum" discipline as Ceph mons below.
+Unlike the stacked-etcd scenario (where `kubeadm upgrade` also bumps etcd's static-pod image), this etcd is a plain apt package independent of Kubernetes' own version — it needs its own upgrade, same "one node at a time, verify quorum" discipline as Ceph mons below.
 
 **1. Pick a new pinned version** (on `k8s-etcd-1`):
 ```sh
@@ -172,7 +172,7 @@ sudo ceph -s          # HEALTH_OK
 ```
 
 ## Also covers
-- etcd backup and restore: `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec` needed, unlike the internal-etcd scenario — this etcd is a plain systemd service)
+- etcd backup and restore: `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec` needed, unlike the stacked-etcd scenario — this etcd is a plain systemd service)
 - Adding/removing control-plane, etcd, and worker nodes
 - Certificate rotation (etcd's own CA from [08-bootstrap.md](08-bootstrap.md) step 2, separate from Kubernetes' PKI)
 

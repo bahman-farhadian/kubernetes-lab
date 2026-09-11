@@ -24,7 +24,7 @@ PROMETHEUS_VERSION="<version from the list above>"
 sudo apt install -y prometheus=${PROMETHEUS_VERSION}
 sudo apt-mark hold prometheus
 ```
-Add every node to the scrape config, `/etc/prometheus/prometheus.yml` — note the 3 dedicated `k8s-etcd-*` targets, which don't exist in the internal-etcd scenario:
+Add every node to the scrape config, `/etc/prometheus/prometheus.yml` — note the 3 dedicated `k8s-etcd-*` targets, which don't exist in the stacked-etcd scenario:
 ```yaml
 scrape_configs:
   - job_name: node

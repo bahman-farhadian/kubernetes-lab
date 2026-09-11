@@ -153,7 +153,7 @@ sudo ceph -s          # HEALTH_OK
 - Certificate rotation
 
 ## Applies to
-Light profile, internal (stacked) etcd.
+Light profile, stacked etcd.
 
 ## Prerequisites
 - [15-security-hardening.md](15-security-hardening.md)

@@ -37,7 +37,7 @@ Host budget: capped at 50% CPU share on the host. Adjust to your actual host's a
 - **RAM** is a hard cap on the laptop: VM total + host reserved = 32 GB exactly, no slack.
 - **vCPU** is deliberately oversubscribed (20 vCPU allocated against a 12-vCPU, 50%-capped share) — safe for vCPU, unlike RAM, since the hypervisor time-slices cores that aren't all pegged at once.
 - **Disk** is one physical pool on the laptop (unlike the server's split NVMe): Root (190 GB) + Ceph OSD (120 GB) = 310 GB used out of the 1 TB disk, leaving ~690 GB for the host OS, snapshots, etc.
-- `k8s-monitor` is new versus the original plan: Prometheus + Grafana run outside the cluster (see [00-overview.md](00-overview.md)), and putting them on the bastion would couple monitoring uptime to the LB/jump host. If you'd rather not spend a whole VM on it, fold it back into `k8s-bastion` and bump that VM to 2 vCPU / 3 GB instead — each directory's `13-observability.md` (e.g. [1-light-laptop/internal-etcd/13-observability.md](1-light-laptop/internal-etcd/13-observability.md)) doesn't care which host it lands on.
+- `k8s-monitor` is new versus the original plan: Prometheus + Grafana run outside the cluster (see [00-overview.md](00-overview.md)), and putting them on the bastion would couple monitoring uptime to the LB/jump host. If you'd rather not spend a whole VM on it, fold it back into `k8s-bastion` and bump that VM to 2 vCPU / 3 GB instead — each directory's `13-observability.md` (e.g. [1-light-laptop/stacked-etcd/13-observability.md](1-light-laptop/stacked-etcd/13-observability.md)) doesn't care which host it lands on.
 
 ### Scenario B — External etcd
 
@@ -63,7 +63,7 @@ Same reconciliation rules as Scenario A: RAM caps exactly at 32 GB (25 + 7), vCP
 
 ## Server — Heavy and GPU profiles
 
-Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory (see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md)). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
+Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory (see [3-gpu-server/stacked-etcd/README.md](3-gpu-server/stacked-etcd/README.md)). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
 
 ### Heavy — Scenario A (Stacked etcd)
 
@@ -95,7 +95,7 @@ Everything in Heavy above, plus:
 
 The GPU profile is the only one that fully commits the box's budget (VM totals + host reserved = PC totals, no slack) — one more reason to bring Heavy up cleanly first.
 
-`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/internal-etcd/README.md](3-gpu-server/internal-etcd/README.md).
+`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: planned as `18-gpu-node.md` in each `3-gpu-server/` scenario directory — see [3-gpu-server/stacked-etcd/README.md](3-gpu-server/stacked-etcd/README.md).
 
 ### Heavy/GPU — Scenario B (External etcd)
 
