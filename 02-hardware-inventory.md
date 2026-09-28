@@ -30,7 +30,7 @@ Host budget: capped at 50% CPU share on the host. Adjust to your actual host's a
 | 06 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
 | 07 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
 | 08 | k8s-monitor | Prometheus + Grafana | 10.0.1.31 | 1 | 2 GB | 20 GB | - |
-| | **VM TOTALS** | | | **20** | **21 GB** | **190 GB** | **120 GB** |
+| | **VM TOTALS (8 VMs)** | | | **20** | **21 GB** | **190 GB** | **120 GB** |
 | | **HOST RESERVED** | | | **2** | **11 GB** | — | — |
 | | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
 
@@ -55,7 +55,7 @@ Control plane drops to 2 nodes (apiserver/scheduler/controller-manager only, no 
 | 08 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
 | 09 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
 | 10 | k8s-monitor | Prometheus + Grafana | 10.0.1.31 | 1 | 2 GB | 20 GB | - |
-| | **VM TOTALS** | | | **21** | **25 GB** | **220 GB** | **120 GB** |
+| | **VM TOTALS (10 VMs)** | | | **21** | **25 GB** | **220 GB** | **120 GB** |
 | | **HOST RESERVED** | | | **2** | **7 GB** | — | — |
 | | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
 
@@ -76,7 +76,7 @@ Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — si
 | 05 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
 | 06 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 07 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS** | | | **20** | **100 GB** | **170 GB** | **600 GB** |
+| | **VM TOTALS (7 VMs)** | | | **20** | **100 GB** | **170 GB** | **600 GB** |
 
 Leaves 4 vCPU / 28 GB / 80 GB root / 400 GB OSD of the box unused — that headroom is exactly `k8s-work-4`, reserved for the GPU profile below rather than spent here.
 
@@ -89,7 +89,7 @@ Everything in Heavy above, plus:
 | # | VM Name | Role | IP Address | vCPU | RAM | Root Disk (250G NVMe) | Ceph OSD (1T NVMe) |
 |---|---|---|---|---|---|---|---|
 | 08 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (Heavy + this row)** | | | **22** | **124 GB** | **190 GB** | **800 GB** |
+| | **VM TOTALS (8 VMs)** | | | **22** | **124 GB** | **190 GB** | **800 GB** |
 | | **HOST RESERVED** | | | **2** | **4 GB** | **60 GB** | **200 GB** |
 | | **PC TOTALS** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
@@ -113,7 +113,7 @@ Sized against the **GPU** profile's full budget (bastion + 3 workers + the GPU w
 | 08 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 09 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
 | 10 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS** | | | **23** | **122 GB** | **190 GB** | **800 GB** |
+| | **VM TOTALS (10 VMs)** | | | **23** | **122 GB** | **190 GB** | **800 GB** |
 | | **HOST RESERVED** | | | **1** | **6 GB** | **60 GB** | **200 GB** |
 | | **PC TOTALS** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
