@@ -2,9 +2,11 @@
 
 **Goal:** Initialize the HA control plane with `kubeadm`, etcd stacked on each control-plane node.
 
+Open this file only if you circled **Scenario A (stacked etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). External etcd: [08-bootstrap-external.md](08-bootstrap-external.md).
+
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](../../00-overview.md#version-pinning-and-the-upgrade-exercise) — so [16-day2-operations.md](16-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [16-day2-operations.md](16-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -19,6 +21,7 @@ KUBE_DEPLOY_VERSION="1.36.4-1.1"   # confirm this exact string (Debian package r
 
 sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION} kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl
+sudo systemctl enable kubelet
 ```
 Use the **same** `KUBE_DEPLOY_VERSION` on all three control-plane nodes — a version mismatch between them is exactly the kind of thing this pinning is meant to prevent.
 
@@ -44,21 +47,29 @@ sudo kubeadm join 10.0.1.10:6443 --token <token> \
   --control-plane --certificate-key <key>
 ```
 
-**4. Verify etcd quorum** (from `k8s-ctrl-1`):
+**4. Verify etcd quorum** (from `k8s-ctrl-1`). Use the admin kubeconfig — `sudo kubectl` looks at `/root/.kube/config`, which is empty:
 ```sh
-sudo kubectl -n kube-system exec etcd-k8s-ctrl-1 -- etcdctl \
+kubectl --kubeconfig $HOME/.kube/config -n kube-system exec etcd-k8s-ctrl-1 -- etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key \
   member list
 ```
-Expect 3 members, all `started`. Nodes stay `NotReady` until [10-cni.md](10-cni.md) — expected at this point.
+Same thing as `sudo kubectl --kubeconfig /etc/kubernetes/admin.conf ...`. Expect 3 members, all `started`. Nodes stay `NotReady` until [10-cni.md](10-cni.md) — expected at this point.
 
 **5. Set up `kubectl` access from `k8s-bastion` and your workstation** — `10.0.1.0/24` generally isn't reachable directly from outside, so the bastion is the intended jump point; don't rely on `k8s-ctrl-1` alone for day-to-day access.
 
-On `k8s-bastion` — same Kubernetes apt repo as the cluster nodes (step 1), `kubectl` only, no `kubelet`/`kubeadm`:
+On `k8s-bastion` — same Kubernetes apt repo as the cluster nodes (step 1; the bastion never ran that step, so add the repo here), `kubectl` only, no `kubelet`/`kubeadm`:
 ```sh
+KUBE_DEPLOY_MINOR=v1.36            # MUST match step 1
+KUBE_DEPLOY_VERSION="1.36.4-1.1"   # MUST match step 1
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt update
 sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubectl
 mkdir -p ~/.kube
@@ -107,11 +118,11 @@ flowchart TB
 ```
 
 ## Applies to
-Light profile, stacked etcd only.
+Stacked etcd (any profile). Hardware: Scenario A table for your profile in [02-hardware-inventory.md](02-hardware-inventory.md).
 
 ## Prerequisites
 - [07-load-balancer.md](07-load-balancer.md)
-- [02-hardware-inventory.md](../../02-hardware-inventory.md) — Laptop / Light profile, Scenario A table
+- [02-hardware-inventory.md](02-hardware-inventory.md)
 
 ## Next
 - [09-join-nodes.md](09-join-nodes.md)

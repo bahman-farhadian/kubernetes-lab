@@ -2,9 +2,11 @@
 
 **Goal:** Stand up an independent etcd cluster, then initialize the control plane against it.
 
+Open this file only if you circled **Scenario B (external etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). Stacked etcd: [08-bootstrap-stacked.md](08-bootstrap-stacked.md).
+
 ## Steps
 
-Etcd here runs as a native systemd service on `k8s-etcd-1/2/3` (no kubelet/containerd on these nodes — keeps them outside the "less containers" tradeoff entirely, per [00-overview.md](../../00-overview.md)).
+Etcd here runs as a native systemd service on `k8s-etcd-1/2/3` (no kubelet/containerd on these nodes — keeps them outside the "less containers" tradeoff entirely, per [00-overview.md](00-overview.md)).
 
 **1. Install a pinned etcd version on `k8s-etcd-1/2/3`** (verify the exact package name first — Debian splits it as `etcd-server`/`etcd-client` on recent releases), same version on all three:
 ```sh
@@ -16,21 +18,52 @@ sudo apt-mark hold etcd-server etcd-client
 sudo systemctl stop etcd   # reconfigure before first real start
 ```
 
-**2. Generate a CA and per-node TLS certs** — run once, e.g. on `k8s-etcd-1`, then distribute:
+**2. Generate a CA, per-node server certs, and an apiserver client cert** — run once on `k8s-etcd-1`, then distribute. Debian 13 is OpenSSL 3: `openssl x509 -req` does **not** copy SAN from the CSR unless you pass `-copy_extensions copy`. Without SAN, etcd TLS fails hostname/IP checks.
+
 ```sh
 mkdir -p /tmp/etcd-pki && cd /tmp/etcd-pki
 openssl genrsa -out ca-key.pem 4096
 openssl req -x509 -new -nodes -key ca-key.pem -days 3650 -out ca.pem -subj "/CN=etcd-ca"
 
+# per-node server/peer cert — own DNS + IP + localhost (listen-client-urls includes 127.0.0.1)
+declare -A ETCD_IPS=([k8s-etcd-1]=10.0.1.15 [k8s-etcd-2]=10.0.1.16 [k8s-etcd-3]=10.0.1.17)
 for node in k8s-etcd-1 k8s-etcd-2 k8s-etcd-3; do
+  ip=${ETCD_IPS[$node]}
   openssl genrsa -out ${node}-key.pem 2048
   openssl req -new -key ${node}-key.pem -out ${node}.csr -subj "/CN=${node}" \
-    -addext "subjectAltName=DNS:${node},IP:10.0.1.15,IP:10.0.1.16,IP:10.0.1.17"
+    -addext "subjectAltName=DNS:${node},DNS:localhost,IP:${ip},IP:127.0.0.1"
   openssl x509 -req -in ${node}.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
-    -out ${node}.pem -days 825
+    -out ${node}.pem -days 825 -copy_extensions copy
+  openssl x509 -in ${node}.pem -noout -text | grep -A1 "Subject Alternative Name"
 done
+
+# dedicated client cert for kube-apiserver (official HA path: apiserver-etcd-client)
+openssl genrsa -out apiserver-etcd-client.key 2048
+openssl req -new -key apiserver-etcd-client.key -out apiserver-etcd-client.csr \
+  -subj "/CN=kube-apiserver-etcd-client"
+openssl x509 -req -in apiserver-etcd-client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+  -out apiserver-etcd-client.crt -days 825
 ```
-Copy `ca.pem`, `<node>.pem`, `<node>-key.pem` to `/etc/etcd/pki/` on the matching node (`chmod 600` the keys, owned by the `etcd` user).
+
+`scp` `/tmp/etcd-pki/` from `k8s-etcd-1` to the other etcd nodes and both control-plane nodes first. Then, on each etcd node, install that node's server cert (keys `chmod 600`, owned by `etcd`):
+```sh
+sudo mkdir -p /etc/etcd/pki
+sudo cp /tmp/etcd-pki/ca.pem /etc/etcd/pki/ca.pem
+sudo cp /tmp/etcd-pki/k8s-etcd-N.pem /etc/etcd/pki/k8s-etcd-N.pem
+sudo cp /tmp/etcd-pki/k8s-etcd-N-key.pem /etc/etcd/pki/k8s-etcd-N-key.pem
+sudo chown -R etcd:etcd /etc/etcd/pki
+sudo chmod 600 /etc/etcd/pki/*-key.pem
+```
+
+On **both** `k8s-ctrl-1` and `k8s-ctrl-2`, install the CA + apiserver client cert at the paths kubeadm expects ([HA with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)):
+```sh
+sudo mkdir -p /etc/kubernetes/pki/etcd
+sudo cp /tmp/etcd-pki/ca.pem /etc/kubernetes/pki/etcd/ca.crt
+sudo cp /tmp/etcd-pki/apiserver-etcd-client.crt /etc/kubernetes/pki/apiserver-etcd-client.crt
+sudo cp /tmp/etcd-pki/apiserver-etcd-client.key /etc/kubernetes/pki/apiserver-etcd-client.key
+sudo chmod 600 /etc/kubernetes/pki/apiserver-etcd-client.key
+```
+Keep `ca-key.pem` only on `k8s-etcd-1` (or offline). You need it to mint replacement certs later, not on the control-plane nodes.
 
 **3. Configure each node** — `/etc/default/etcd` (or `/etc/etcd/etcd.conf.yml`, depending on the packaged unit), same pattern on all three, only the local name/IP changes:
 ```
@@ -76,20 +109,32 @@ KUBE_DEPLOY_VERSION="1.36.4-1.1"   # confirm this exact string (Debian package r
 
 sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION} kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl
+sudo systemctl enable kubelet
 ```
-Use the **same** `KUBE_DEPLOY_VERSION` on both control-plane nodes. Then copy the etcd CA + a client cert/key from step 2 onto `k8s-ctrl-1` (e.g. `/etc/kubernetes/pki/etcd/{ca,client,client-key}.pem`).
+Use the **same** `KUBE_DEPLOY_VERSION` on both control-plane nodes. The etcd CA + `apiserver-etcd-client` files from step 2 must already be on both nodes.
 
-**6. `kubeadm init` on `k8s-ctrl-1`** pointing at the external etcd cluster, with `--kubernetes-version` pinned to match the packages installed in step 5:
+**6. `kubeadm init` on `k8s-ctrl-1`** — kubeadm has **no** `--external-etcd-*` CLI flags. External etcd is a `ClusterConfiguration` in a config file ([HA with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)). Do not mix `--config` with `--pod-network-cidr` / `--control-plane-endpoint`; those fields live in the YAML.
+
 ```sh
-sudo kubeadm init \
-  --control-plane-endpoint "10.0.1.10:6443" \
-  --upload-certs \
-  --pod-network-cidr "192.168.0.0/16" \
-  --kubernetes-version "v${KUBE_DEPLOY_VERSION%%-*}" \
-  --external-etcd-endpoints "https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1.17:2379" \
-  --external-etcd-cafile /etc/kubernetes/pki/etcd/ca.pem \
-  --external-etcd-certfile /etc/kubernetes/pki/etcd/client.pem \
-  --external-etcd-keyfile /etc/kubernetes/pki/etcd/client-key.pem
+cat <<EOF | sudo tee /root/kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v${KUBE_DEPLOY_VERSION%%-*}
+controlPlaneEndpoint: "10.0.1.10:6443"
+networking:
+  podSubnet: "192.168.0.0/16"
+etcd:
+  external:
+    endpoints:
+      - https://10.0.1.15:2379
+      - https://10.0.1.16:2379
+      - https://10.0.1.17:2379
+    caFile: /etc/kubernetes/pki/etcd/ca.crt
+    certFile: /etc/kubernetes/pki/apiserver-etcd-client.crt
+    keyFile: /etc/kubernetes/pki/apiserver-etcd-client.key
+EOF
+
+sudo kubeadm init --config /root/kubeadm-config.yaml --upload-certs
 ```
 Save the two `kubeadm join` commands it prints. Then, still on `k8s-ctrl-1`:
 ```sh
@@ -98,12 +143,20 @@ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
-**7. On `k8s-ctrl-2`** — run the `--control-plane` join command printed by step 6 (`--certificate-key` expires after 2 hours; regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs` if needed).
+**7. On `k8s-ctrl-2`** — confirm `/etc/kubernetes/pki/etcd/ca.crt` and `/etc/kubernetes/pki/apiserver-etcd-client.{crt,key}` are already present (step 2), then run the `--control-plane` join command printed by step 6 (`--certificate-key` expires after 2 hours; regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs` if needed).
 
 **8. Set up `kubectl` access from `k8s-bastion` and your workstation** — `10.0.1.0/24` generally isn't reachable directly from outside, so the bastion is the intended jump point; don't rely on `k8s-ctrl-1` alone for day-to-day access.
 
-On `k8s-bastion` — same Kubernetes apt repo as the control-plane nodes (step 5), `kubectl` only, no `kubelet`/`kubeadm`:
+On `k8s-bastion` — same Kubernetes apt repo as the control-plane nodes (step 5; the bastion never ran that step, so add the repo here), `kubectl` only, no `kubelet`/`kubeadm`:
 ```sh
+KUBE_DEPLOY_MINOR=v1.36            # MUST match step 5
+KUBE_DEPLOY_VERSION="1.36.4-1.1"   # MUST match step 5
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
+  | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt update
 sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubectl
 mkdir -p ~/.kube
@@ -134,7 +187,7 @@ sequenceDiagram
     participant C2 as k8s-ctrl-2
     E->>E: bootstrap etcd cluster + TLS
     Note over E: quorum verified before touching control plane
-    C1->>E: kubeadm init --external-etcd-*
+    C1->>E: kubeadm init --config (etcd.external)
     C2->>C1: kubeadm join --control-plane
 ```
 
@@ -153,11 +206,11 @@ flowchart TB
 ```
 
 ## Applies to
-Light profile, external etcd only.
+External etcd (any profile). Hardware: Scenario B table for your profile in [02-hardware-inventory.md](02-hardware-inventory.md).
 
 ## Prerequisites
 - [07-load-balancer.md](07-load-balancer.md)
-- [02-hardware-inventory.md](../../02-hardware-inventory.md) — Laptop / Light profile, Scenario B table
+- [02-hardware-inventory.md](02-hardware-inventory.md)
 
 ## Next
 - [09-join-nodes.md](09-join-nodes.md)

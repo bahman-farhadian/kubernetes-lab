@@ -4,6 +4,8 @@
 
 Everything here goes in its own namespace so teardown is one command.
 
+Worker CPU/RAM in the example table below is the **Light** 4 vCPU / 4 GB size. On Heavy/GPU, recompute from `kubectl` allocatable on your actual nodes.
+
 ## Steps
 
 **1. Create the namespace:**
@@ -11,7 +13,7 @@ Everything here goes in its own namespace so teardown is one command.
 kubectl create namespace smoke-test
 ```
 
-**2. Baseline: read the cluster's real capacity before adding load.** Ceph (mon+mgr+osd) and Calico already consume some of each worker's 4 vCPU / 4 GB — don't assume the raw VM spec is what's available:
+**2. Baseline: read the cluster's real capacity before adding load.** Ceph (mon+mgr+osd) and Calico already consume some of each worker — don't assume the raw VM spec is what's available:
 ```sh
 kubectl describe nodes k8s-work-1 k8s-work-2 k8s-work-3 | grep -E "^(Name|.*cpu |.*memory )" -A0
 # or, summed across the 3 workers:
@@ -22,9 +24,9 @@ Also check what's already requested (Ceph/Calico daemonsets, etc.):
 ```sh
 kubectl describe nodes k8s-work-1 k8s-work-2 k8s-work-3 | grep -A5 "Allocated resources"
 ```
-Write down: total allocatable CPU/memory across the 3 workers, and what's already requested. The gap between "80% of allocatable" and "already requested" is what steps 4–5 need to add — work this out with your own numbers, not the ones below, which are illustrative only:
+Write down: total allocatable CPU/memory across the workers, and what's already requested. The gap between "80% of allocatable" and "already requested" is what steps 4–5 need to add — work this out with your own numbers, not the ones below, which are illustrative only:
 
-| | Example (illustrative — use your own numbers) |
+| | Example (illustrative — Light, use your own numbers) |
 |---|---|
 | Allocatable, 3 workers combined | 12 vCPU / 12 GB (3 × 4 vCPU/4 GB, minus kubelet/system reserve) |
 | Already requested (Ceph + Calico) | ~1.5 vCPU / ~1.5 GB |
@@ -154,10 +156,7 @@ curl -H "Host: smoketest.lab.local" http://10.0.1.11/   # nginx still answers un
 kubectl -n smoke-test scale deployment/smoketest-stress --replicas=0   # stop generating load first
 kubectl delete namespace smoke-test                                    # then remove everything at once
 ```
-Confirm on Grafana that CPU/memory on all 3 workers drops back to baseline within a minute or two.
-
-## Applies to
-Light profile, either etcd scenario.
+Confirm on Grafana that CPU/memory on all workers drops back to baseline within a minute or two.
 
 ## Prerequisites
 - [13-observability.md](13-observability.md) — you'll want Grafana open while this runs

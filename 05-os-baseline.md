@@ -1,9 +1,9 @@
 # 05. OS Baseline
 
-**Goal:** Bring every VM (bastion, control-plane, workers, monitor) to a common, Kubernetes-ready OS state.
+**Goal:** Bring every VM to a common, Kubernetes-ready OS state.
 
 ## Applies to
-All nodes: `k8s-bastion`, `k8s-ctrl-1/2/3`, `k8s-work-1/2/3`, `k8s-monitor`.
+Every node in the inventory table you circled in [02-hardware-inventory.md](02-hardware-inventory.md).
 
 ## Steps
 
@@ -11,7 +11,9 @@ All nodes: `k8s-bastion`, `k8s-ctrl-1/2/3`, `k8s-work-1/2/3`, `k8s-monitor`.
 ```sh
 sudo hostnamectl set-hostname k8s-ctrl-1   # match the name from 02-hardware-inventory.md
 ```
-Append the full inventory to `/etc/hosts` on **every** node (same block everywhere):
+Append the matching block below to `/etc/hosts` on **every** node (same block everywhere).
+
+Stacked etcd:
 ```
 10.0.1.11  k8s-bastion
 10.0.1.12  k8s-ctrl-1
@@ -23,13 +25,31 @@ Append the full inventory to `/etc/hosts` on **every** node (same block everywhe
 10.0.1.31  k8s-monitor
 ```
 
+External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
+```
+10.0.1.11  k8s-bastion
+10.0.1.12  k8s-ctrl-1
+10.0.1.13  k8s-ctrl-2
+10.0.1.15  k8s-etcd-1
+10.0.1.16  k8s-etcd-2
+10.0.1.17  k8s-etcd-3
+10.0.1.21  k8s-work-1
+10.0.1.22  k8s-work-2
+10.0.1.23  k8s-work-3
+10.0.1.31  k8s-monitor
+```
+
+Profile notes:
+- **Heavy / GPU** — omit `k8s-monitor` (Prometheus/Grafana live on `k8s-bastion`; see [13-observability.md](13-observability.md)).
+- **GPU** — add `10.0.1.24  k8s-work-4`.
+
 **2. Disable swap** — Kubernetes refuses to start with swap on:
 ```sh
 sudo swapoff -a
 sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab
 ```
 
-**3. Kernel modules + sysctl** — required on control-plane and worker nodes (skip on bastion/monitor):
+**3. Kernel modules + sysctl** — required on control-plane and worker nodes (skip on bastion, monitor, and etcd-only nodes — they never run kubelet/containerd):
 ```sh
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 overlay
@@ -50,7 +70,7 @@ sudo sysctl --system
 timedatectl status | grep "synchronized"
 ```
 
-**5. Firewall** — this lab uses the port list from [03-network-plan.md](../../03-network-plan.md). If `nftables`/`ufw` is active, open those ports between nodes; otherwise leave the host firewall disabled and rely on network-level isolation (this is a lab, not exposed to the internet).
+**5. Firewall** — this lab uses the port list from [03-network-plan.md](03-network-plan.md). If `nftables`/`ufw` is active, open those ports between nodes; otherwise leave the host firewall disabled and rely on network-level isolation (this is a lab, not exposed to the internet).
 
 **6. Base packages + full upgrade**, then hold nothing here yet (no cluster packages installed in this step):
 ```sh

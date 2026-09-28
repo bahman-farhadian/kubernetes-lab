@@ -1,16 +1,18 @@
 # 11. Storage — Ceph (native) + Ceph-CSI
 
-**Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](../../00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
+**Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
 
-Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](../../02-hardware-inventory.md).
+Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](02-hardware-inventory.md). This is unrelated to the etcd tier (`k8s-etcd-*` in the external scenario) — Ceph's own mon/quorum is entirely separate from Kubernetes' etcd.
 
-Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later — and as of 2026-09 it bundles Reef (`18.2.7+ds-1+deb13u1`), which upstream Ceph already fully retired in March 2026 (final release 18.2.8). So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in [08-bootstrap.md](08-bootstrap.md)), so [16-day2-operations.md](16-day2-operations.md) has a real Ceph upgrade to walk through: **Squid (v19.x) → Tentacle (v20.x)**.
+Debian's own repo only ever carries one Ceph release per Debian release, which leaves nothing to upgrade *to* later — and as of 2026-09 it bundles Reef (`18.2.7+ds-1+deb13u1`), which upstream Ceph already fully retired in March 2026 (final release 18.2.8). So this uses Ceph's own apt repo instead, pinned to a specific release codename — deliberately one release behind current stable (same reasoning as the Kubernetes version pin in step 08), so [16-day2-operations.md](16-day2-operations.md) has a real Ceph upgrade to walk through: **Squid (v19.x) → Tentacle (v20.x)**.
 
 > **Debian 13/Trixie caveat, checked 2026-09:** Ceph's own [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) list Debian 13 as tier "C" — packages exist but aren't tested by the Ceph project itself — and there are real-world reports of `download.ceph.com`'s Debian repos not resolving cleanly on Trixie yet. Try the repo below first; if `apt update` fails against it, that's the known gap, and your fallback is Debian's own bundled Reef packages (`apt-cache policy ceph-common`) purely to get *a* working cluster for this lab — know that it's already past upstream EOL, so treat it as a stopgap, not something to run for real.
 
 ## Steps — native Ceph cluster (run on `k8s-work-1/2/3`)
 
-**1. Add Ceph's repo and install a pinned release** (all 3 nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases before running, and see the Debian 13 caveat above):
+**GPU profile:** `k8s-work-4` also gets an OSD (same `ceph-volume` step). Mons stay on work-1/2/3 for quorum of 3.
+
+**1. Add Ceph's repo and install a pinned release** (all OSD nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases before running, and see the Debian 13 caveat above):
 ```sh
 CEPH_DEPLOY_RELEASE=squid   # v19.x — current stable as of 2026-09 (19.2.6), scheduled EOL 2026-10-31; reverify at docs.ceph.com/en/latest/releases
 curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph.gpg
@@ -25,7 +27,7 @@ sudo apt install -y ceph-mon=${CEPH_DEPLOY_VERSION} ceph-mgr=${CEPH_DEPLOY_VERSI
   ceph-osd=${CEPH_DEPLOY_VERSION} ceph-common=${CEPH_DEPLOY_VERSION}
 sudo apt-mark hold ceph-mon ceph-mgr ceph-osd ceph-common
 ```
-Use the same `CEPH_DEPLOY_VERSION` on all three nodes.
+Use the same `CEPH_DEPLOY_VERSION` on all three (four, GPU) nodes. On `k8s-work-4` you only need `ceph-osd` + `ceph-common` if you prefer not to run a fourth mon/mgr.
 
 **2. Generate cluster identity + config** (once, e.g. on `k8s-work-1`):
 ```sh
@@ -43,7 +45,7 @@ auth client required = cephx
 osd pool default size = 3
 EOF
 ```
-Copy this `ceph.conf` to `/etc/ceph/ceph.conf` on all 3 nodes.
+Copy this `ceph.conf` to `/etc/ceph/ceph.conf` on all OSD nodes.
 
 **3. Generate keyrings and monmap** (once, on `k8s-work-1`, then copy the resulting files to the other two):
 ```sh
@@ -58,34 +60,46 @@ sudo monmaptool --create --fsid "$FSID" \
 ```
 Copy `/tmp/ceph.mon.keyring`, `/tmp/monmap`, and `/etc/ceph/ceph.client.admin.keyring` to the same paths on `k8s-work-2`/`k8s-work-3`.
 
-**4. Bootstrap each mon** (all 3 nodes, same commands, substitute the local hostname):
+**4. Bootstrap each mon** (all 3 mon nodes, same commands, substitute the local hostname):
 ```sh
 sudo -u ceph mkdir -p /var/lib/ceph/mon/ceph-k8s-work-1
 sudo -u ceph ceph-mon --mkfs -i k8s-work-1 --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
 sudo systemctl enable --now ceph-mon@k8s-work-1
 ```
 
-**5. Bootstrap mgr** (all 3 nodes):
+**5. Bootstrap mgr** (all 3 mon nodes). Create the directory **before** writing the keyring — `-o` will not create parent dirs:
 ```sh
+sudo mkdir -p /var/lib/ceph/mgr/ceph-k8s-work-1
+sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1
 sudo ceph auth get-or-create mgr.k8s-work-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' \
   -o /var/lib/ceph/mgr/ceph-k8s-work-1/keyring
-sudo mkdir -p /var/lib/ceph/mgr/ceph-k8s-work-1 && sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1
+sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1/keyring
 sudo systemctl enable --now ceph-mgr@k8s-work-1
 ```
 
-**6. Bring up the OSD** on each worker's dedicated Ceph disk (confirm the device name with `lsblk` first — don't assume `/dev/sdb`):
+**6. Bootstrap-OSD keyring** — `ceph-volume` authenticates as `client.bootstrap-osd`. Without this file, OSD create fails ([Ceph manual deployment](https://docs.ceph.com/en/latest/install/manual-deployment/)):
 ```sh
+sudo mkdir -p /var/lib/ceph/bootstrap-osd
+sudo ceph auth get-or-create client.bootstrap-osd \
+  mon 'profile bootstrap-osd' mgr 'allow r' \
+  -o /var/lib/ceph/bootstrap-osd/ceph.keyring
+```
+Copy `/var/lib/ceph/bootstrap-osd/ceph.keyring` (and `/etc/ceph/ceph.conf` if not already there) to every OSD node (`k8s-work-1/2/3`, plus `k8s-work-4` on GPU).
+
+**7. Bring up the OSD** on each worker's dedicated Ceph disk (confirm the device name with `lsblk` first — don't assume `/dev/sdb`):
+```sh
+sudo apt install -y lvm2   # ceph-volume needs it
 sudo ceph-volume lvm create --data /dev/sdb
 ```
 
-**7. Verify:**
+**8. Verify:**
 ```sh
-sudo ceph -s   # expect 3 mons in quorum, 3 osds up/in
+sudo ceph -s   # expect 3 mons in quorum, 3 osds up/in (4 osds on GPU)
 ```
 
 ## Steps — expose storage to Kubernetes via Ceph-CSI
 
-**8. Create a pool and a scoped client for CSI:**
+**9. Create a pool and a scoped client for CSI:**
 ```sh
 sudo ceph osd pool create kubernetes
 sudo rbd pool init kubernetes
@@ -95,7 +109,17 @@ sudo ceph auth get-or-create client.kubernetes \
 sudo ceph auth print-key client.kubernetes   # save this key for the Secret below
 ```
 
-**9. Deploy a pinned Ceph-CSI RBD driver version via Helm** (check [github.com/ceph/ceph-csi](https://github.com/ceph/ceph-csi) for the current chart version list):
+**10. Helm 3, then a pinned Ceph-CSI RBD chart** — Debian's `apt` package named `helm` is Emacs, not this. Install Helm from the official tarball on the host that has `kubectl` (usually `k8s-ctrl-1`). Check [github.com/helm/helm/releases](https://github.com/helm/helm/releases) and pin an exact tag:
+```sh
+helm version   # skip the next block if Helm 3 is already on PATH
+HELM_VERSION="v3.22.0"   # latest Helm 3 as of 2026-09 — confirm against the releases page above
+curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz
+tar -xzf /tmp/helm.tgz -C /tmp
+sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+helm version
+```
+
+Deploy Ceph-CSI (check [github.com/ceph/ceph-csi](https://github.com/ceph/ceph-csi) for the current chart version list):
 ```sh
 helm repo add ceph-csi https://ceph.github.io/csi-charts && helm repo update
 helm search repo ceph-csi/ceph-csi-rbd --versions | head   # pick an exact chart version
@@ -108,10 +132,10 @@ helm install ceph-csi-rbd ceph-csi/ceph-csi-rbd -n ceph-csi-rbd --version "${CEP
   --set csiConfig[0].monitors[2]=10.0.1.23:6789
 ```
 
-**10. Secret + StorageClass:**
+**11. Secret + StorageClass:**
 ```sh
 kubectl create secret generic csi-rbd-secret -n ceph-csi-rbd \
-  --from-literal=userID=kubernetes --from-literal=userKey=<key from step 8>
+  --from-literal=userID=kubernetes --from-literal=userKey=<key from step 9>
 
 cat <<EOF | kubectl apply -f -
 apiVersion: storage.k8s.io/v1
@@ -131,7 +155,7 @@ allowVolumeExpansion: true
 EOF
 ```
 
-**11. Verify** with a test PVC — confirm it reaches `Bound`, then delete it.
+**12. Verify** with a test PVC — confirm it reaches `Bound`, then delete it.
 
 ## Ceph cluster layout
 
@@ -139,17 +163,14 @@ EOF
 flowchart TB
     subgraph Ceph["Native Ceph cluster (mon+mgr+osd)"]
         direction LR
-        W1["k8s-work-1"]:::worker --> O1["OSD 40GB"]:::storage
-        W2["k8s-work-2"]:::worker --> O2["OSD 40GB"]:::storage
-        W3["k8s-work-3"]:::worker --> O3["OSD 40GB"]:::storage
+        W1["k8s-work-1"]:::worker --> O1["OSD"]:::storage
+        W2["k8s-work-2"]:::worker --> O2["OSD"]:::storage
+        W3["k8s-work-3"]:::worker --> O3["OSD"]:::storage
     end
 
     classDef worker fill:#2da44e,stroke:#164c24,color:#ffffff
     classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
 ```
-
-## Applies to
-Light profile, either etcd scenario (storage layout is identical — only control-plane/etcd topology differs between scenarios).
 
 ## Prerequisites
 - [10-cni.md](10-cni.md)

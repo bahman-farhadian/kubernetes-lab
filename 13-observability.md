@@ -2,11 +2,15 @@
 
 **Goal:** Get metrics and logs flowing before relying on the cluster for anything.
 
-**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](../../00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on the dedicated `k8s-monitor` VM. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
+**Approach:** host-level monitoring only, entirely outside the cluster (per [00-overview.md](00-overview.md)) — `node_exporter` on every node, Prometheus + Grafana on a host OS install. This deliberately does not cover in-cluster object metrics (kube-state-metrics) or logs — just CPU/memory/disk on every node, which is what was asked for; add `metrics-server` later if `kubectl top`/HPA is needed.
+
+Where Prometheus/Grafana run:
+- **Light** — dedicated `k8s-monitor` VM (`10.0.1.31`)
+- **Heavy / GPU** — on `k8s-bastion` (no monitor VM)
 
 ## Steps
 
-**1. `node_exporter` on every node** — bastion, control-plane, workers, and `k8s-monitor` itself, same pinned version everywhere:
+**1. `node_exporter` on every node** in the [05-os-baseline.md](05-os-baseline.md) hosts block (bastion, control-plane, etcd if present, workers, and `k8s-monitor` if present), same pinned version everywhere:
 ```sh
 sudo apt update
 apt-cache madison prometheus-node-exporter   # list exact available versions — pick one
@@ -17,14 +21,14 @@ sudo systemctl enable --now prometheus-node-exporter
 ```
 Verify locally: `curl -s localhost:9100/metrics | head`.
 
-**2. Prometheus on `k8s-monitor`:**
+**2. Prometheus** on the monitoring host (`k8s-monitor` on Light, `k8s-bastion` on Heavy/GPU):
 ```sh
 apt-cache madison prometheus
 PROMETHEUS_VERSION="<version from the list above>"
 sudo apt install -y prometheus=${PROMETHEUS_VERSION}
 sudo apt-mark hold prometheus
 ```
-Add every node to the scrape config, `/etc/prometheus/prometheus.yml`:
+Add every node from the step-05 hosts block to the scrape config, `/etc/prometheus/prometheus.yml`. Stacked Light example:
 ```yaml
 scrape_configs:
   - job_name: node
@@ -39,13 +43,14 @@ scrape_configs:
           - 10.0.1.23:9100   # k8s-work-3
           - 10.0.1.31:9100   # k8s-monitor itself
 ```
+External etcd: drop `10.0.1.14` (`k8s-ctrl-3`), add `10.0.1.15/16/17` (`k8s-etcd-1/2/3`). Heavy/GPU: drop `10.0.1.31`. GPU: add `10.0.1.24` (`k8s-work-4`).
 ```sh
 sudo systemctl restart prometheus
 sudo systemctl enable prometheus
 ```
 Verify: `curl -s localhost:9090/api/v1/targets | grep health` — all `"up"`.
 
-**3. Grafana on `k8s-monitor`** — not in Debian's main repo, add Grafana's own apt repo (check [grafana.com/docs](https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/) for the current Debian 13/Trixie instructions before adding):
+**3. Grafana** on the same monitoring host — not in Debian's main repo, add Grafana's own apt repo (check [grafana.com/docs](https://grafana.com/docs/grafana/latest/setup-grafana/installation/debian/) for the current Debian 13/Trixie instructions before adding):
 ```sh
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://apt.grafana.com/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
@@ -62,9 +67,6 @@ sudo systemctl enable --now grafana-server
 **4. Wire up Grafana:** add Prometheus (`http://localhost:9090`) as a data source, then import a community "Node Exporter Full" dashboard (search its ID on [grafana.com/dashboards](https://grafana.com/dashboards) — verify it's still maintained before importing) for the CPU/memory/disk view across all nodes.
 
 > "Storage" here is host-level disk usage via `node_exporter`'s filesystem collector, not Ceph cluster internals (pool usage, PG state, OSD latency). Ceph ships its own `prometheus` `mgr` module (`ceph mgr module enable prometheus`) if you want that scraped later — out of scope for this pass since it wasn't asked for.
-
-## Applies to
-Light profile, either etcd scenario.
 
 ## Prerequisites
 - [12-ingress.md](12-ingress.md)

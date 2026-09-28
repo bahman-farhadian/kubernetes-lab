@@ -4,16 +4,16 @@
 
 ## Covers
 - etcd quorum loss recovery
+  - **Stacked:** `kubectl exec` into the etcd static pod
+  - **External:** on the standalone `k8s-etcd-*` nodes — no `kubectl exec` available, work directly via `etcdctl`/`systemctl`
 - Node stuck `NotReady`
 - Ceph OSD/placement group issues
 - kubeadm join/token failures
 - LB/VIP failover issues on the bastion
 
-## Applies to
-Light profile, stacked etcd.
-
 ## Prerequisites
 - Populated as issues come up during deployment.
 
 ## Next
-- [18-deployment-log.md](../../18-deployment-log.md) — record what you actually deployed
+- GPU profile: [18-gpu-node.md](18-gpu-node.md)
+- Everyone: [19-deployment-log.md](19-deployment-log.md) — record what you actually deployed

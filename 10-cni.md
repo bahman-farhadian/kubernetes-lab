@@ -26,9 +26,6 @@ kubectl get pods -n calico-system -w
 kubectl get nodes    # all should flip to Ready once Calico pods are Running
 ```
 
-## Applies to
-Light profile, either etcd scenario.
-
 ## Prerequisites
 - [09-join-nodes.md](09-join-nodes.md)
 

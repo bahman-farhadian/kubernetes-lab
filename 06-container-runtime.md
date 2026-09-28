@@ -3,7 +3,7 @@
 **Goal:** Install and configure the container runtime on control-plane and worker nodes.
 
 ## Applies to
-`k8s-ctrl-1/2/3` and `k8s-work-1/2/3`. Not required on the bastion or `k8s-monitor`.
+Every `k8s-ctrl-*` and `k8s-work-*` in the inventory table you circled in [02-hardware-inventory.md](02-hardware-inventory.md). Not required on the bastion, `k8s-monitor`, or `k8s-etcd-*` — etcd (external scenario) runs as a native systemd service, no kubelet/containerd involved (see [08-bootstrap-external.md](08-bootstrap-external.md)).
 
 ## Steps
 

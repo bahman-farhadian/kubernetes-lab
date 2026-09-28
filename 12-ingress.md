@@ -24,9 +24,6 @@ Add a second HAProxy frontend/backend pair on the bastion for ports 80/443, back
 
 **3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` through the bastion.
 
-## Applies to
-Light profile, either etcd scenario.
-
 ## Prerequisites
 - [11-storage-ceph.md](11-storage-ceph.md)
 
