@@ -1,4 +1,4 @@
-# 13. Observability
+# 14. Observability
 
 **Goal:** Get metrics and logs flowing before relying on the cluster for anything.
 
@@ -10,7 +10,7 @@ Where Prometheus/Grafana run:
 
 ## Steps
 
-**1. `node_exporter` on every node** in the [05-os-baseline.md](05-os-baseline.md) hosts block (bastion, control-plane, etcd if present, workers, and `k8s-monitor` if present), same pinned version everywhere:
+**1. `node_exporter` on every node** in the [05-os-baseline.md](05-os-baseline.md) hosts block (firewalls, bastion, control-plane, etcd if present, workers, and `k8s-monitor` if present), same pinned version everywhere:
 ```sh
 sudo apt update
 apt-cache madison prometheus-node-exporter   # list exact available versions — pick one
@@ -34,6 +34,8 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets:
+          - 10.0.1.1:9100    # k8s-fw-1
+          - 10.0.1.2:9100    # k8s-fw-2
           - 10.0.1.11:9100   # k8s-bastion
           - 10.0.1.12:9100   # k8s-ctrl-1
           - 10.0.1.13:9100   # k8s-ctrl-2
@@ -69,7 +71,7 @@ sudo systemctl enable --now grafana-server
 > "Storage" here is host-level disk usage via `node_exporter`'s filesystem collector, not Ceph cluster internals (pool usage, PG state, OSD latency). Ceph ships its own `prometheus` `mgr` module (`ceph mgr module enable prometheus`) if you want that scraped later — out of scope for this pass since it wasn't asked for.
 
 ## Prerequisites
-- [12-ingress.md](12-ingress.md)
+- [13-ingress.md](13-ingress.md)
 
 ## Next
-- [14-smoke-test.md](14-smoke-test.md)
+- [15-smoke-test.md](15-smoke-test.md)

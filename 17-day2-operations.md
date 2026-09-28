@@ -1,12 +1,12 @@
-# 16. Day-2 Operations
+# 17. Day-2 Operations
 
-**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 08–11 to a newer pinned version.
+**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 09–12 to a newer pinned version.
 
-**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `etcd-*`, `ceph-*`, `prometheus*`, `grafana`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
+**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `prometheus*`, `grafana`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
 
 ## Steps — Kubernetes minor upgrade
 
-Deployed on `KUBE_DEPLOY_VERSION` (steps 08/09). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
+Deployed on `KUBE_DEPLOY_VERSION` (steps 09/10). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
 
 **1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
 ```sh
@@ -174,12 +174,12 @@ sudo ceph -s          # HEALTH_OK
 ## Also covers
 - etcd backup and restore:
   - **Stacked:** all 3 members live in `/var/lib/etcd` on `k8s-ctrl-1/2/3` — `etcdctl snapshot save` against any member
-  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [08-bootstrap-external.md](08-bootstrap-external.md) step 2, separate from Kubernetes' PKI
+  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [09-bootstrap-external.md](09-bootstrap-external.md) step 2, separate from Kubernetes' PKI
 - Adding/removing control-plane, etcd, and worker nodes
 - Certificate rotation
 
 ## Prerequisites
-- [15-security-hardening.md](15-security-hardening.md)
+- [16-security-hardening.md](16-security-hardening.md)
 
 ## Next
-- [17-troubleshooting.md](17-troubleshooting.md)
+- [18-troubleshooting.md](18-troubleshooting.md)

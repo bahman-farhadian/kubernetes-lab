@@ -1,9 +1,9 @@
-# 06. Container Runtime
+# 07. Container Runtime
 
 **Goal:** Install and configure the container runtime on control-plane and worker nodes.
 
 ## Applies to
-Every `k8s-ctrl-*` and `k8s-work-*` in the inventory table you circled in [02-hardware-inventory.md](02-hardware-inventory.md). Not required on the bastion, `k8s-monitor`, or `k8s-etcd-*` — etcd (external scenario) runs as a native systemd service, no kubelet/containerd involved (see [08-bootstrap-external.md](08-bootstrap-external.md)).
+Every `k8s-ctrl-*` and `k8s-work-*` in the inventory table you circled in [02-hardware-inventory.md](02-hardware-inventory.md). Not required on the firewalls, bastion, `k8s-monitor`, or `k8s-etcd-*`.
 
 ## Steps
 
@@ -14,7 +14,7 @@ apt-cache madison containerd   # list exact available versions — pick one
 CONTAINERD_VERSION="<version from the list above>"
 sudo apt install -y containerd=${CONTAINERD_VERSION}
 ```
-> Verify the version kubeadm expects for your chosen Kubernetes minor (step 08) is satisfied: `containerd --version`. If Debian 13's bundled version is too old for the Kubernetes release you pick, use Docker's official `containerd.io` apt repo instead — check [download.docker.com](https://download.docker.com) for the current Debian 13/Trixie instructions before adding it.
+> Verify the version kubeadm expects for your chosen Kubernetes minor (step 09) is satisfied: `containerd --version`. If the distro's bundled version is too old, use Docker's official `containerd.io` apt repo instead — check [download.docker.com](https://download.docker.com) for Debian 13 or Ubuntu 26 before adding it.
 
 **2. Generate default config and switch to the systemd cgroup driver** (must match kubelet's cgroup driver):
 ```sh
@@ -37,7 +37,7 @@ sudo apt-mark hold containerd
 ```
 
 ## Prerequisites
-- [05-os-baseline.md](05-os-baseline.md)
+- [06-firewall.md](06-firewall.md)
 
 ## Next
-- [07-load-balancer.md](07-load-balancer.md)
+- [08-load-balancer.md](08-load-balancer.md)

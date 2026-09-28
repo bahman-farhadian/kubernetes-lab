@@ -1,10 +1,10 @@
-# 07. Bastion / Load Balancer
+# 08. Bastion / Load Balancer
 
 **Goal:** Stand up the apiserver-facing load balancer (and jump host) on `k8s-bastion` before bootstrapping the control plane.
 
 ## Steps
 
-**1. Install a pinned, held HAProxy version** (single bastion VM, so no keepalived/VRRP needed — the bastion itself is the single point of entry by design in this lab):
+**1. Install a pinned, held HAProxy version** (no keepalived on the bastion — WAN/LAN HA is the firewall pair in [06-firewall.md](06-firewall.md); the bastion is still a single point of failure for apiserver `:6443`):
 ```sh
 sudo apt update
 apt-cache madison haproxy   # list exact available versions — pick one
@@ -13,7 +13,7 @@ sudo apt install -y haproxy=${HAPROXY_VERSION}
 sudo apt-mark hold haproxy
 ```
 
-**2. Put `10.0.1.10` on the bastion NIC** — HAProxy `bind 10.0.1.10:6443` fails with `EADDRNOTAVAIL` unless that address exists on an interface. The bastion's primary IP is `10.0.1.11`; the VIP is a second address on the same L2 (no keepalived — single bastion is the SPOF by design).
+**2. Put `10.0.1.10` on the bastion NIC** — HAProxy `bind 10.0.1.10:6443` fails with `EADDRNOTAVAIL` unless that address exists on an interface. The bastion's primary IP is `10.0.1.11` in the examples; the VIP is a second address on the same LAN NIC (not the firewall LAN VIP `.254`).
 
 ```sh
 IFACE=$(ip -br route show default | awk '{print $5; exit}')
@@ -73,7 +73,7 @@ sudo systemctl restart haproxy
 sudo systemctl enable haproxy
 nc -zv 10.0.1.10 6443
 ```
-`haproxy -c` only parses the file — it does not bind. `nc` should get **connection refused** (backends are empty until step 08). A timeout or "no route" means the VIP is still missing. Backend checks showing the control-plane servers as `DOWN` is expected until the apiserver is up.
+`haproxy -c` only parses the file — it does not bind. `nc` should get **connection refused** (backends are empty until step 09). A timeout or "no route" means the VIP is still missing. Backend checks showing the control-plane servers as `DOWN` is expected until the apiserver is up.
 
 ## Request path
 
@@ -93,8 +93,8 @@ flowchart LR
 ```
 
 ## Prerequisites
-- [06-container-runtime.md](06-container-runtime.md) (bastion itself doesn't need a container runtime, but control-plane targets must be reachable)
+- [07-container-runtime.md](07-container-runtime.md) (bastion itself doesn't need a container runtime, but control-plane targets must be reachable)
 
 ## Next
-- Stacked etcd: [08-bootstrap-stacked.md](08-bootstrap-stacked.md)
-- External etcd: [08-bootstrap-external.md](08-bootstrap-external.md)
+- Stacked etcd: [09-bootstrap-stacked.md](09-bootstrap-stacked.md)
+- External etcd: [09-bootstrap-external.md](09-bootstrap-external.md)

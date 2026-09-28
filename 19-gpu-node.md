@@ -1,10 +1,10 @@
-# 18. GPU node
+# 19. GPU node
 
 **Goal:** After a healthy Heavy cluster, add `k8s-work-4` as a tainted NVIDIA worker. GPU is Heavy plus this step, not a from-scratch build.
 
 **Status:** Outline — fill in with real commands on the first GPU run. PCI passthrough / IOMMU is hypervisor-level and out of scope (see [00-overview.md](00-overview.md)); this repo assumes the GPU is already visible inside the VM.
 
-Do this only for the **GPU** profile, after [17-troubleshooting.md](17-troubleshooting.md) on a cluster that already matches the Heavy table in [02-hardware-inventory.md](02-hardware-inventory.md). `k8s-work-4` should already have been joined in [09-join-nodes.md](09-join-nodes.md) and given an OSD in [11-storage-ceph.md](11-storage-ceph.md).
+Do this only for the **GPU** profile, after [18-troubleshooting.md](18-troubleshooting.md) on a cluster that already matches the Heavy table in [02-hardware-inventory.md](02-hardware-inventory.md). `k8s-work-4` should already have been joined in [10-join-nodes.md](10-join-nodes.md) and given an OSD in [12-storage-ceph.md](12-storage-ceph.md).
 
 ## Covers
 - Confirm the GPU is visible in the guest (`lspci`, `nvidia-smi` after the driver)
@@ -19,4 +19,4 @@ Do this only for the **GPU** profile, after [17-troubleshooting.md](17-troublesh
 - [02-hardware-inventory.md](02-hardware-inventory.md) GPU table (Scenario A or B)
 
 ## Next
-- [19-deployment-log.md](19-deployment-log.md)
+- [20-deployment-log.md](20-deployment-log.md)

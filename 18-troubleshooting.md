@@ -1,4 +1,4 @@
-# 17. Troubleshooting
+# 18. Troubleshooting
 
 **Goal:** Collect known issues and fixes encountered while building this lab.
 
@@ -9,11 +9,12 @@
 - Node stuck `NotReady`
 - Ceph OSD/placement group issues
 - kubeadm join/token failures
-- LB/VIP failover issues on the bastion
+- LB/VIP issues on the bastion (apiserver `10.0.1.10`)
+- Firewall keepalived WAN/LAN VIP failover (`k8s-fw-1` / `k8s-fw-2`)
 
 ## Prerequisites
 - Populated as issues come up during deployment.
 
 ## Next
-- GPU profile: [18-gpu-node.md](18-gpu-node.md)
-- Everyone: [19-deployment-log.md](19-deployment-log.md) — record what you actually deployed
+- GPU profile: [19-gpu-node.md](19-gpu-node.md)
+- Everyone: [20-deployment-log.md](20-deployment-log.md) — record what you actually deployed
