@@ -1,10 +1,10 @@
-# 12. Storage — Ceph (native) + Ceph-CSI
+# 13. Storage — Ceph (native) + Ceph-CSI
 
 **Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
 
 Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [02-hardware-inventory.md](02-hardware-inventory.md). This is unrelated to the etcd tier (`k8s-etcd-*` in the external scenario) — Ceph's own mon/quorum is entirely separate from Kubernetes' etcd.
 
-Distro apt only ever carries one Ceph release per OS release, which leaves nothing to upgrade *to* later. Debian 13 as of 2026-09 bundles Reef (`18.2.7+ds-1+deb13u1`), which upstream already retired in March 2026. So this uses Ceph's own apt repo instead (`$(lsb_release -sc)` picks `trixie` or the Ubuntu 26 codename), pinned one release behind current stable (same reasoning as the Kubernetes pin in step 09), so [17-day2-operations.md](17-day2-operations.md) has a real upgrade: **Squid (v19.x) → Tentacle (v20.x)**.
+Distro apt only ever carries one Ceph release per OS release, which leaves nothing to upgrade *to* later. Debian 13 as of 2026-09 bundles Reef (`18.2.7+ds-1+deb13u1`), which upstream already retired in March 2026. So this uses Ceph's own apt repo instead (`$(lsb_release -sc)` picks `trixie` or the Ubuntu 26 codename), pinned one release behind current stable (same reasoning as the Kubernetes pin in step 10), so [18-day2-operations.md](18-day2-operations.md) has a real upgrade: **Squid (v19.x) → Tentacle (v20.x)**.
 
 > **OS caveat, checked 2026-09:** Ceph's [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) rate Debian 13 tier "C" (packages exist, untested). Ubuntu 26 may or may not be listed yet — check that page before you add the repo. Try the repo below first; if `apt update` fails, Debian's fallback is its bundled Reef (`apt-cache policy ceph-common`) as a stopgap (already past upstream EOL). On Ubuntu, do not fall back to an unmaintained distro Ceph; fix the Ceph repo or stop.
 
@@ -173,7 +173,7 @@ flowchart TB
 ```
 
 ## Prerequisites
-- [11-cni.md](11-cni.md)
+- [12-cni.md](12-cni.md)
 
 ## Next
-- [13-ingress.md](13-ingress.md)
+- [14-ingress.md](14-ingress.md)

@@ -1,0 +1,35 @@
+# 15. Observability
+
+**Goal:** Export host metrics from every node. Prometheus and Grafana are already running as Compose services on `k8s-bastion` from [07-nexus.md](07-nexus.md). This step is the **node_exporter** agents plus a Grafana dashboard. No in-cluster kube-state-metrics or logging stack.
+
+`node_exporter` is a **systemd** package on every VM (including the bastion). It needs the host's `/proc` and `/sys`; do not put it in the Compose file.
+
+## Steps
+
+**1. `node_exporter` on every node** in the [05-os-baseline.md](05-os-baseline.md) hosts block (firewalls, bastion, control-plane, etcd if present, workers):
+```sh
+sudo apt update
+apt-cache madison prometheus-node-exporter
+NODE_EXPORTER_VERSION="<version from the list above>"
+sudo apt install -y prometheus-node-exporter=${NODE_EXPORTER_VERSION}
+sudo apt-mark hold prometheus-node-exporter
+sudo systemctl enable --now prometheus-node-exporter
+```
+Verify locally: `curl -s localhost:9100/metrics | head`. Prefer the Nexus apt proxy from step 07 if you created `apt-debian` / `apt-ubuntu`.
+
+**2. Confirm Prometheus** (from the bastion or your workstation):
+```sh
+curl -s http://k8s-bastion:9090/api/v1/targets | grep -E '"health"|up'
+```
+Every node_exporter target should be `"up"`. If a target is missing, edit `/opt/prometheus/prometheus.yml` and `cd /opt/prometheus && sudo docker compose up -d`.
+
+**3. Grafana:** open `http://k8s-bastion:3000`. Datasource from inside the Grafana container: `http://host.docker.internal:9090`. Import a maintained "Node Exporter Full" dashboard from [grafana.com/dashboards](https://grafana.com/dashboards).
+
+> Host disk via node_exporter, not Ceph pool internals. `ceph mgr module enable prometheus` is out of scope here.
+
+## Prerequisites
+- [14-ingress.md](14-ingress.md)
+- [07-nexus.md](07-nexus.md) — Compose stack already up
+
+## Next
+- [16-smoke-test.md](16-smoke-test.md)

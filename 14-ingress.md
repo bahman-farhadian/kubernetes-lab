@@ -1,4 +1,4 @@
-# 13. Ingress
+# 14. Ingress
 
 **Goal:** Expose services outside the cluster.
 
@@ -16,7 +16,7 @@ helm install traefik traefik/traefik -n traefik --version "${TRAEFIK_CHART_VERSI
 ```
 Helm has no `apt-mark hold` equivalent — the pin *is* the control: only ever `helm upgrade` this release with an explicit `--version` you chose deliberately, never omit it.
 
-**2. Expose it** — since there's no cloud LoadBalancer here, use a `NodePort` (or `hostNetwork`) Service and point the HAProxy on `k8s-bastion` at it, the same way it already fronts the apiserver in [08-load-balancer.md](08-load-balancer.md):
+**2. Expose it** — since there's no cloud LoadBalancer here, use a `NodePort` (or `hostNetwork`) Service and point the HAProxy on `k8s-bastion` at it, the same way it already fronts the apiserver in [09-load-balancer.md](09-load-balancer.md):
 ```sh
 kubectl get svc -n traefik   # note the NodePort for 80/443
 ```
@@ -25,7 +25,7 @@ Add a second HAProxy frontend/backend pair on the bastion for ports 80/443, back
 **3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` through the bastion.
 
 ## Prerequisites
-- [12-storage-ceph.md](12-storage-ceph.md)
+- [13-storage-ceph.md](13-storage-ceph.md)
 
 ## Next
-- [14-observability.md](14-observability.md)
+- [15-observability.md](15-observability.md)

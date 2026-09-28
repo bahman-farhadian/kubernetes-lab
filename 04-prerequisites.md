@@ -8,7 +8,7 @@
 - Base OS: **Debian 13 ("Trixie")** *or* **Ubuntu 26 ("Resolute Raccoon")**, minimal install, fully updated (`apt update && apt full-upgrade`) before you start
 - Every VM reachable by hostname/IP from your workstation (or via the bastion as a jump host) over SSH, key-based auth, with a `sudo`-capable non-root user — including `k8s-fw-1` / `k8s-fw-2`
 - `curl`, `gnupg`, `ca-certificates` present (needed to add the Kubernetes/Ceph/Grafana apt repos in later steps)
-- The LAN plan in the table you circled matches what's assigned (including firewall LAN IPs, `k8s-etcd-*` if external, `k8s-monitor` if Light, `k8s-work-4` if GPU). WAN addresses on the firewalls are site-local and stay out of this repo
+- The LAN plan in the table you circled matches what's assigned (including firewall LAN IPs, `k8s-etcd-*` if external, `k8s-work-4` if GPU). WAN addresses on the firewalls are site-local and stay out of this repo. There is no `k8s-monitor` VM.
 - Each firewall VM has two NICs (WAN + LAN)
 - A working path to the internet **once the firewall pair is up** (step 06); before that, you may need a temporary default route to finish `apt` on the firewalls themselves
 

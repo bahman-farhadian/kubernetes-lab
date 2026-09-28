@@ -26,7 +26,6 @@ Stacked etcd:
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
-10.0.1.31   k8s-monitor
 ```
 
 External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
@@ -44,12 +43,11 @@ External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
-10.0.1.31   k8s-monitor
 ```
 
 Profile notes:
-- **Heavy / GPU** — omit `k8s-monitor` (Prometheus/Grafana live on `k8s-bastion`; see [14-observability.md](14-observability.md)).
 - **GPU** — add `10.0.1.24  k8s-work-4`.
+- There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
 
 **2. Disable swap** — Kubernetes refuses to start with swap on:
 ```sh

@@ -1,9 +1,9 @@
-# 20. Deployment Log
+# 21. Deployment Log
 
 **Goal:** Record the exact pinned versions actually used each time a profile is deployed or upgraded. The steps in this repo use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …) rather than hardcoded numbers — this doc is where the concrete values you picked for a given run actually live, since [00-overview.md](00-overview.md) can't record them for you.
 
 ## Applies to
-All profiles and both etcd scenarios. Add one new row per deploy and per upgrade — don't overwrite previous rows, the history is the point (it's what makes [17-day2-operations.md](17-day2-operations.md) checkable afterward: what did we run, what did we upgrade to, when).
+All profiles and both etcd scenarios. Add one new row per deploy and per upgrade — don't overwrite previous rows, the history is the point (it's what makes [18-day2-operations.md](18-day2-operations.md) checkable afterward: what did we run, what did we upgrade to, when).
 
 ## How to use this doc
 
@@ -18,7 +18,7 @@ Copy the table below for each profile ([Light](README.md#rollout-plan) / Heavy /
 | YYYY-MM-DD | Ceph upgrade | | | | | | | | | |
 
 - **Date** — when the step actually ran, not when it was planned.
-- **Event** — "Initial deploy" (steps 09–12), "K8s upgrade" or "Ceph upgrade" ([17-day2-operations.md](17-day2-operations.md)), or anything else worth a line (cert rotation, node replaced, etc.).
+- **Event** — "Initial deploy" (steps 10–13), "K8s upgrade" or "Ceph upgrade" ([18-day2-operations.md](18-day2-operations.md)), or anything else worth a line (cert rotation, node replaced, etc.).
 - Leave columns blank if that component wasn't touched in this event — e.g. a Ceph upgrade row only needs the Ceph column filled in.
 
 ## Prerequisites

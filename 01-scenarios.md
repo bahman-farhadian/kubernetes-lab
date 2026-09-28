@@ -2,19 +2,19 @@
 
 **Goal:** Pick a control-plane/etcd topology before provisioning VMs, since it changes the node count and the bootstrap steps you'll follow later.
 
-The two names are interchangeable throughout this repo. Procedure is shared (`04`–`18`); the fork is only step 09 — see [README.md](README.md#layout).
+The two names are interchangeable throughout this repo. Procedure is shared (`04`–`19`); the fork is only step 10 — see [README.md](README.md#layout).
 
 ## Scenario A — Stacked etcd
 - etcd runs co-located on each control-plane node (standard `kubeadm` HA topology).
 - 3 control-plane nodes (odd count, required for etcd quorum).
 - Simpler: fewer VMs, one bootstrap path, etcd and apiserver fail together per node.
-- Bootstrap: [09-bootstrap-stacked.md](09-bootstrap-stacked.md).
+- Bootstrap: [10-bootstrap-stacked.md](10-bootstrap-stacked.md).
 
 ## Scenario B — External (dedicated) etcd
 - etcd runs on its own VMs, independent of the control-plane nodes.
 - 3 dedicated etcd nodes (odd count, still required for quorum) + 2 control-plane nodes (apiserver is stateless, so it doesn't need quorum and can run on fewer nodes).
 - More VMs and moving parts, but control-plane and etcd fail independently, and each can be scaled/replaced on its own.
-- Bootstrap: [09-bootstrap-external.md](09-bootstrap-external.md).
+- Bootstrap: [10-bootstrap-external.md](10-bootstrap-external.md).
 
 ## Topology diagrams
 

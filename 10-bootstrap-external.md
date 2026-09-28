@@ -1,8 +1,8 @@
-# 09. Bootstrap — External etcd
+# 10. Bootstrap — External etcd
 
 **Goal:** Stand up an independent etcd cluster, then initialize the control plane against it.
 
-Open this file only if you circled **Scenario B (external etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). Stacked etcd: [09-bootstrap-stacked.md](09-bootstrap-stacked.md).
+Open this file only if you circled **Scenario B (external etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). Stacked etcd: [10-bootstrap-stacked.md](10-bootstrap-stacked.md).
 
 ## Steps
 
@@ -94,7 +94,7 @@ etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1
 ```
 All 3 must report healthy before continuing.
 
-**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — deliberately one minor behind current stable so [17-day2-operations.md](17-day2-operations.md) has a real upgrade to practice:
+**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — deliberately one minor behind current stable so [18-day2-operations.md](18-day2-operations.md) has a real upgrade to practice:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -209,8 +209,8 @@ flowchart TB
 External etcd (any profile). Hardware: Scenario B table for your profile in [02-hardware-inventory.md](02-hardware-inventory.md).
 
 ## Prerequisites
-- [08-load-balancer.md](08-load-balancer.md)
+- [09-load-balancer.md](09-load-balancer.md)
 - [02-hardware-inventory.md](02-hardware-inventory.md)
 
 ## Next
-- [10-join-nodes.md](10-join-nodes.md)
+- [11-join-nodes.md](11-join-nodes.md)

@@ -1,12 +1,12 @@
-# 09. Bootstrap — Stacked etcd
+# 10. Bootstrap — Stacked etcd
 
 **Goal:** Initialize the HA control plane with `kubeadm`, etcd stacked on each control-plane node.
 
-Open this file only if you circled **Scenario A (stacked etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). External etcd: [09-bootstrap-external.md](09-bootstrap-external.md).
+Open this file only if you circled **Scenario A (stacked etcd)** in [02-hardware-inventory.md](02-hardware-inventory.md). External etcd: [10-bootstrap-external.md](10-bootstrap-external.md).
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [17-day2-operations.md](17-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [18-day2-operations.md](18-day2-operations.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -56,7 +56,7 @@ kubectl --kubeconfig $HOME/.kube/config -n kube-system exec etcd-k8s-ctrl-1 -- e
   --key=/etc/kubernetes/pki/etcd/server.key \
   member list
 ```
-Same thing as `sudo kubectl --kubeconfig /etc/kubernetes/admin.conf ...`. Expect 3 members, all `started`. Nodes stay `NotReady` until [11-cni.md](11-cni.md) — expected at this point.
+Same thing as `sudo kubectl --kubeconfig /etc/kubernetes/admin.conf ...`. Expect 3 members, all `started`. Nodes stay `NotReady` until [12-cni.md](12-cni.md) — expected at this point.
 
 **5. Set up `kubectl` access from `k8s-bastion` and your workstation** — `10.0.1.0/24` generally isn't reachable directly from outside, so the bastion is the intended jump point; don't rely on `k8s-ctrl-1` alone for day-to-day access.
 
@@ -121,8 +121,8 @@ flowchart TB
 Stacked etcd (any profile). Hardware: Scenario A table for your profile in [02-hardware-inventory.md](02-hardware-inventory.md).
 
 ## Prerequisites
-- [08-load-balancer.md](08-load-balancer.md)
+- [09-load-balancer.md](09-load-balancer.md)
 - [02-hardware-inventory.md](02-hardware-inventory.md)
 
 ## Next
-- [10-join-nodes.md](10-join-nodes.md)
+- [11-join-nodes.md](11-join-nodes.md)

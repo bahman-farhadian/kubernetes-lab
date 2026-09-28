@@ -1,6 +1,6 @@
-# 08. Bastion / Load Balancer
+# 09. Bastion / Load Balancer
 
-**Goal:** Stand up the apiserver-facing load balancer (and jump host) on `k8s-bastion` before bootstrapping the control plane.
+**Goal:** Stand up the apiserver-facing load balancer on `k8s-bastion` before bootstrapping the control plane. HAProxy is **systemd**, not Compose — it binds `10.0.1.10:6443` and must not depend on Docker. Nexus/Prometheus/Grafana are already the Compose stack from [07-nexus.md](07-nexus.md).
 
 ## Steps
 
@@ -73,7 +73,7 @@ sudo systemctl restart haproxy
 sudo systemctl enable haproxy
 nc -zv 10.0.1.10 6443
 ```
-`haproxy -c` only parses the file — it does not bind. `nc` should get **connection refused** (backends are empty until step 09). A timeout or "no route" means the VIP is still missing. Backend checks showing the control-plane servers as `DOWN` is expected until the apiserver is up.
+`haproxy -c` only parses the file — it does not bind. `nc` should get **connection refused** (backends are empty until step 10). A timeout or "no route" means the VIP is still missing. Backend checks showing the control-plane servers as `DOWN` is expected until the apiserver is up.
 
 ## Request path
 
@@ -93,8 +93,8 @@ flowchart LR
 ```
 
 ## Prerequisites
-- [07-container-runtime.md](07-container-runtime.md) (bastion itself doesn't need a container runtime, but control-plane targets must be reachable)
+- [08-container-runtime.md](08-container-runtime.md) (bastion itself doesn't need a container runtime, but control-plane targets must be reachable)
 
 ## Next
-- Stacked etcd: [09-bootstrap-stacked.md](09-bootstrap-stacked.md)
-- External etcd: [09-bootstrap-external.md](09-bootstrap-external.md)
+- Stacked etcd: [10-bootstrap-stacked.md](10-bootstrap-stacked.md)
+- External etcd: [10-bootstrap-external.md](10-bootstrap-external.md)

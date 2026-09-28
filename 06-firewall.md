@@ -1,6 +1,6 @@
 # 06. Firewall pair
 
-**Goal:** Put a two-node keepalived firewall in front of the LAN so the cluster has a redundant default gateway and a single WAN entry. The apiserver VIP on the bastion ([08-load-balancer.md](08-load-balancer.md)) is a separate address; do not merge the two.
+**Goal:** Put a two-node keepalived firewall in front of the LAN so the cluster has a redundant default gateway and a single WAN entry. The apiserver VIP on the bastion ([09-load-balancer.md](09-load-balancer.md)) is a separate address; do not merge the two.
 
 **Applies to:** `k8s-fw-1` and `k8s-fw-2` only. Not a Kubernetes node — no kubelet, no containerd.
 
@@ -121,4 +121,4 @@ flowchart LR
 - [05-os-baseline.md](05-os-baseline.md)
 
 ## Next
-- [07-container-runtime.md](07-container-runtime.md)
+- [07-nexus.md](07-nexus.md)

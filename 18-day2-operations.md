@@ -1,12 +1,14 @@
-# 17. Day-2 Operations
+# 18. Day-2 Operations
 
-**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 09–12 to a newer pinned version.
+**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 10–13 to a newer pinned version.
 
-**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `prometheus*`, `grafana`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
+**Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `docker-ce` on the bastion, `prometheus-node-exporter`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
+
+Compose on the bastion: change the image tag in **that app's** file only (`/opt/nexus/compose.yaml`, `/opt/prometheus/compose.yaml`, or `/opt/grafana/compose.yaml`), then `cd /opt/<app> && sudo docker compose pull && sudo docker compose up -d`. Do not pull without changing the tag.
 
 ## Steps — Kubernetes minor upgrade
 
-Deployed on `KUBE_DEPLOY_VERSION` (steps 09/10). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
+Deployed on `KUBE_DEPLOY_VERSION` (steps 10/11). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
 
 **1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
 ```sh
@@ -174,12 +176,12 @@ sudo ceph -s          # HEALTH_OK
 ## Also covers
 - etcd backup and restore:
   - **Stacked:** all 3 members live in `/var/lib/etcd` on `k8s-ctrl-1/2/3` — `etcdctl snapshot save` against any member
-  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [09-bootstrap-external.md](09-bootstrap-external.md) step 2, separate from Kubernetes' PKI
+  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [10-bootstrap-external.md](10-bootstrap-external.md) step 2, separate from Kubernetes' PKI
 - Adding/removing control-plane, etcd, and worker nodes
 - Certificate rotation
 
 ## Prerequisites
-- [16-security-hardening.md](16-security-hardening.md)
+- [17-security-hardening.md](17-security-hardening.md)
 
 ## Next
-- [18-troubleshooting.md](18-troubleshooting.md)
+- [19-troubleshooting.md](19-troubleshooting.md)

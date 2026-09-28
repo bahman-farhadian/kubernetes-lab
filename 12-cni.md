@@ -1,8 +1,8 @@
-# 11. CNI (Pod Networking)
+# 12. CNI (Pod Networking)
 
 **Goal:** Install a CNI plugin so nodes go `Ready` and pods get networking.
 
-**Choice:** Calico — supports `NetworkPolicy` (used in [16-security-hardening.md](16-security-hardening.md)) and matches the `192.168.0.0/16` pod CIDR set in step 09. Same reasoning as Kubernetes/Ceph applies here too: deployed one release behind current stable, so [17-day2-operations.md](17-day2-operations.md) has a real Calico upgrade to walk through, not just a pin-and-forget.
+**Choice:** Calico — supports `NetworkPolicy` (used in [17-security-hardening.md](17-security-hardening.md)) and matches the `192.168.0.0/16` pod CIDR set in step 10. Same reasoning as Kubernetes/Ceph applies here too: deployed one release behind current stable, so [18-day2-operations.md](18-day2-operations.md) has a real Calico upgrade to walk through, not just a pin-and-forget.
 
 ## Steps
 
@@ -16,7 +16,7 @@ kubectl create -f "https://raw.githubusercontent.com/projectcalico/calico/${CALI
 ```sh
 curl -fsSL -o custom-resources.yaml \
   "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_DEPLOY_VERSION}/manifests/custom-resources.yaml"
-grep -A1 'cidr:' custom-resources.yaml   # confirm it reads 192.168.0.0/16 (default) before applying — edit it first if you used a different pod CIDR in step 09
+grep -A1 'cidr:' custom-resources.yaml   # confirm it reads 192.168.0.0/16 (default) before applying — edit it first if you used a different pod CIDR in step 10
 kubectl create -f custom-resources.yaml
 ```
 
@@ -27,7 +27,7 @@ kubectl get nodes    # all should flip to Ready once Calico pods are Running
 ```
 
 ## Prerequisites
-- [10-join-nodes.md](10-join-nodes.md)
+- [11-join-nodes.md](11-join-nodes.md)
 
 ## Next
-- [12-storage-ceph.md](12-storage-ceph.md)
+- [13-storage-ceph.md](13-storage-ceph.md)

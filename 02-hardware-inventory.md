@@ -26,24 +26,23 @@ LAN addresses in these tables are **examples** for the procedure (`10.0.1.0/24`)
 |---|---|---|---|---|---|---|---|
 | 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
 | 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-bastion | Bastion / LB | 10.0.1.11 | 1 | 1 GB | 20 GB | - |
+| 03 | k8s-bastion | Jump / HAProxy / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
 | 04 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
 | 05 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
 | 06 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 2 GB | 30 GB | - |
 | 07 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 4 GB | 20 GB | 40 GB |
 | 08 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
 | 09 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
-| 10 | k8s-monitor | Prometheus + Grafana | 10.0.1.31 | 1 | 2 GB | 20 GB | - |
-| | **VM TOTALS (10 VMs)** | | | **24** | **25 GB** | **230 GB** | **120 GB** |
-| | **HOST RESERVED** | | | **2** | **7 GB** | — | — |
+| | **VM TOTALS (9 VMs)** | | | **24** | **26 GB** | **230 GB** | **120 GB** |
+| | **HOST RESERVED** | | | **2** | **6 GB** | — | — |
 | | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
 
-LAN VIP (keepalived, default gateway) is `10.0.1.254` in the examples — not a VM. Apiserver VIP `10.0.1.10` lives on the bastion ([08-load-balancer.md](08-load-balancer.md)).
+LAN VIP (keepalived, default gateway) is `10.0.1.254` in the examples — not a VM. Apiserver VIP `10.0.1.10` lives on the bastion ([09-load-balancer.md](09-load-balancer.md)).
 
 - **RAM** is a hard cap on the laptop: VM total + host reserved = 32 GB exactly, no slack.
 - **vCPU** is deliberately oversubscribed (24 vCPU allocated against a 12-vCPU, 50%-capped share) — safe for vCPU, unlike RAM, since the hypervisor time-slices cores that aren't all pegged at once.
 - **Disk** is one physical pool on the laptop (unlike the server's split NVMe): Root (230 GB) + Ceph OSD (120 GB) = 350 GB used out of the 1 TB disk, leaving ~650 GB for the host OS, snapshots, etc.
-- `k8s-monitor` is new versus the original plan: Prometheus + Grafana run outside the cluster (see [00-overview.md](00-overview.md)), and putting them on the bastion would couple monitoring uptime to the LB/jump host. If you'd rather not spend a whole VM on it, fold it back into `k8s-bastion` and bump that VM to 2 vCPU / 3 GB instead — [14-observability.md](14-observability.md) doesn't care which host it lands on.
+- Jump, HAProxy, Nexus (apt/container cache), and Prometheus/Grafana share `k8s-bastion` — one VM instead of bastion + monitor. Nexus blob store is why the root disk is 40 GB ([07-nexus.md](07-nexus.md), [15-observability.md](15-observability.md)).
 
 ### Scenario B — External etcd
 
@@ -53,7 +52,7 @@ Control plane drops to 2 nodes (apiserver/scheduler/controller-manager only, no 
 |---|---|---|---|---|---|---|---|
 | 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
 | 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-bastion | Bastion / LB | 10.0.1.11 | 1 | 1 GB | 20 GB | - |
+| 03 | k8s-bastion | Jump / HAProxy / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
 | 04 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
 | 05 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
 | 06 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 2 GB | 20 GB | - |
@@ -62,16 +61,15 @@ Control plane drops to 2 nodes (apiserver/scheduler/controller-manager only, no 
 | 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 4 GB | 20 GB | 40 GB |
 | 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
 | 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
-| 12 | k8s-monitor | Prometheus + Grafana | 10.0.1.31 | 1 | 2 GB | 20 GB | - |
-| | **VM TOTALS (12 VMs)** | | | **25** | **29 GB** | **260 GB** | **120 GB** |
-| | **HOST RESERVED** | | | **2** | **3 GB** | — | — |
+| | **VM TOTALS (11 VMs)** | | | **25** | **30 GB** | **260 GB** | **120 GB** |
+| | **HOST RESERVED** | | | **2** | **2 GB** | — | — |
 | | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
 
-Same reconciliation rules as Scenario A: RAM caps exactly at 32 GB (29 + 3), vCPU oversubscribes on purpose (25 allocated vs. the 12-vCPU share), and Root+OSD (260 + 120 = 380 GB) share the one 1 TB disk. Three extra etcd VMs (each with their own small root disk) is why Scenario B's totals run a bit higher than Scenario A's despite dropping a control-plane node. 29 GB for VMs is tight on a 32 GB laptop — leave headroom by not running this scenario at the same time as anything else.
+Same reconciliation rules as Scenario A: RAM caps exactly at 32 GB (30 + 2), vCPU oversubscribes. Three extra etcd VMs is why Scenario B runs heavier than A despite dropping a control-plane node. 30 GB of VMs on a 32 GB laptop is tight — do not run this at the same time as anything else.
 
 ## Server — Heavy and GPU profiles
 
-Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, [19-gpu-node.md](19-gpu-node.md). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
+Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — sized as given, no CPU-share cap. Heavy and GPU are the **same base cluster**; GPU is Heavy plus one extra VM (`k8s-work-4`) and one extra step, [20-gpu-node.md](20-gpu-node.md). Deploy Heavy, confirm it's healthy, then decide whether to add the GPU worker on top rather than bootstrapping GPU from scratch.
 
 ### Heavy — Scenario A (Stacked etcd)
 
@@ -79,18 +77,18 @@ Host budget: 250 GB NVMe for root disks, 1 TB NVMe dedicated to Ceph OSDs — si
 |---|---|---|---|---|---|---|---|
 | 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
 | 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-bastion | Bastion / LB / Monitoring | 10.0.1.11 | 2 | 4 GB | 20 GB | - |
+| 03 | k8s-bastion | Jump / HAProxy / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
 | 04 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 8 GB | 30 GB | - |
 | 05 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 8 GB | 30 GB | - |
 | 06 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 8 GB | 30 GB | - |
 | 07 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
 | 08 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 09 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (9 VMs)** | | | **24** | **104 GB** | **210 GB** | **600 GB** |
+| | **VM TOTALS (9 VMs)** | | | **24** | **104 GB** | **230 GB** | **600 GB** |
 
 The firewall pair spends the 4 vCPU that used to sit idle for GPU. `k8s-work-4` still fits in RAM/disk; GPU stacked oversubscribes **2 vCPU** on this box.
 
-No separate `k8s-monitor` VM, unlike Light — Prometheus + Grafana run directly on `k8s-bastion` instead, sized generously enough (2 vCPU / 4 GB) to absorb it; see [14-observability.md](14-observability.md).
+Same combined bastion as Light (jump + HAProxy + Nexus + Prometheus/Grafana). Root disk 40 GB is for the Nexus blob store. See [07-nexus.md](07-nexus.md) and [15-observability.md](15-observability.md).
 
 ### GPU — Scenario A (Heavy + GPU worker)
 
@@ -99,13 +97,13 @@ Everything in Heavy above, plus:
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk (250G NVMe) | Ceph OSD (1T NVMe) |
 |---|---|---|---|---|---|---|---|
 | 10 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (10 VMs)** | | | **26** | **128 GB** | **230 GB** | **800 GB** |
-| | **HOST RESERVED** | | | — | — | **20 GB** | **200 GB** |
+| | **VM TOTALS (10 VMs)** | | | **26** | **128 GB** | **250 GB** | **800 GB** |
+| | **HOST RESERVED** | | | — | — | — | **200 GB** |
 | | **PC TOTALS** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
 RAM and disk still close; vCPU oversubscribes 26 vs 24. Bring Heavy up cleanly first.
 
-`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: [19-gpu-node.md](19-gpu-node.md).
+`k8s-work-4` is a VM with a GPU passed straight through to it (PCI passthrough). That passthrough/IOMMU configuration happens at the hypervisor level and is out of scope here (see [00-overview.md](00-overview.md)) — this repo assumes the GPU is already visible inside the VM. Inside the cluster, the node is tainted to reserve it for GPU workloads only. In-guest driver, device-plugin, and taint setup: [20-gpu-node.md](20-gpu-node.md).
 
 ### Heavy/GPU — Scenario B (External etcd)
 
@@ -115,7 +113,7 @@ Sized against the **GPU** profile's full budget (bastion + 3 workers + the GPU w
 |---|---|---|---|---|---|---|---|
 | 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
 | 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-bastion | Bastion / LB / Monitoring | 10.0.1.11 | 2 | 4 GB | 20 GB | - |
+| 03 | k8s-bastion | Jump / HAProxy / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
 | 04 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 8 GB | 30 GB | - |
 | 05 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 8 GB | 30 GB | - |
 | 06 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 2 GB | 10 GB | - |
@@ -125,8 +123,8 @@ Sized against the **GPU** profile's full budget (bastion + 3 workers + the GPU w
 | 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
 | 12 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (12 VMs)** | | | **27** | **126 GB** | **230 GB** | **800 GB** |
-| | **HOST RESERVED** | | | — | **2 GB** | **20 GB** | **200 GB** |
+| | **VM TOTALS (12 VMs)** | | | **27** | **126 GB** | **250 GB** | **800 GB** |
+| | **HOST RESERVED** | | | — | **2 GB** | — | **200 GB** |
 | | **PC TOTALS** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
 vCPU oversubscribes (27 vs 24); RAM/disk still close. Drop `k8s-work-4` for a Scenario-B "Heavy only" cluster.

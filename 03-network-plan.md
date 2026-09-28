@@ -7,11 +7,11 @@ LAN addresses in this repo (`10.0.1.0/24`, VIPs `.10` / `.254`) are **examples**
 ## Covers
 - **Edge:** two dual-homed firewall VMs (`k8s-fw-1` / `k8s-fw-2`), keepalived WAN VIP + LAN VIP, one VRID per lab instance — [06-firewall.md](06-firewall.md). Cluster nodes use the LAN VIP as default gateway.
 - **LAN (example):** `10.0.1.0/24` for every profile (Light/Heavy/GPU). Profiles are independent instances and must not share a live L2 at the same time.
-- **Apiserver VIP:** `10.0.1.10:6443` on `k8s-bastion` HAProxy ([08-load-balancer.md](08-load-balancer.md)) — not the firewall LAN VIP.
+- **Apiserver VIP:** `10.0.1.10:6443` on `k8s-bastion` HAProxy ([09-load-balancer.md](09-load-balancer.md)) — not the firewall LAN VIP.
 - Hostname / DNS: static `/etc/hosts` on every node — [05-os-baseline.md](05-os-baseline.md). No cluster-internal DNS server for this lab.
 - Kubernetes ranges (must not overlap the LAN): pod CIDR `192.168.0.0/16` (Calico default), service CIDR `10.96.0.0/12` (kubeadm default)
-- Ports on the LAN: `6443` (apiserver, via bastion VIP), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on `k8s-monitor` or the bastion). VRRP (protocol 112) between the two firewalls.
-- Outbound internet for apt and container images goes **through the firewall pair** (NAT on WAN).
+- Ports on the LAN: `6443` (apiserver, via bastion VIP), `8081`/`8082` (Nexus HTTP UI + docker connector on the bastion), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on the bastion). VRRP (protocol 112) between the two firewalls.
+- First-time fills of Nexus go **through the firewall pair** (NAT on WAN). After [07-nexus.md](07-nexus.md), nodes should use the bastion cache instead of the public internet.
 
 ## Network diagram
 
@@ -25,7 +25,6 @@ flowchart LR
     CP -.-> Etcd["etcd"]:::etcd
     CP --> Work["Workers"]:::worker
     Work --> Storage["Ceph OSDs"]:::storage
-    Bastion -.-> Mon["monitor"]:::storage
 
     classDef bastion fill:#1f6feb,stroke:#0c2d6b,color:#ffffff
     classDef controlPlane fill:#8250df,stroke:#4b1f91,color:#ffffff
@@ -38,4 +37,4 @@ flowchart LR
 - [02-hardware-inventory.md](02-hardware-inventory.md)
 
 ## Next
-- Circle a profile × scenario in [02-hardware-inventory.md](02-hardware-inventory.md), then [04-prerequisites.md](04-prerequisites.md). At step 09, open [09-bootstrap-stacked.md](09-bootstrap-stacked.md) or [09-bootstrap-external.md](09-bootstrap-external.md).
+- Circle a profile × scenario in [02-hardware-inventory.md](02-hardware-inventory.md), then [04-prerequisites.md](04-prerequisites.md). At step 10, open [10-bootstrap-stacked.md](10-bootstrap-stacked.md) or [10-bootstrap-external.md](10-bootstrap-external.md).

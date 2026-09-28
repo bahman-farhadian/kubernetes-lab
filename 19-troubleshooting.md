@@ -1,4 +1,4 @@
-# 18. Troubleshooting
+# 19. Troubleshooting
 
 **Goal:** Collect known issues and fixes encountered while building this lab.
 
@@ -16,5 +16,5 @@
 - Populated as issues come up during deployment.
 
 ## Next
-- GPU profile: [19-gpu-node.md](19-gpu-node.md)
-- Everyone: [20-deployment-log.md](20-deployment-log.md) — record what you actually deployed
+- GPU profile: [20-gpu-node.md](20-gpu-node.md)
+- Everyone: [21-deployment-log.md](21-deployment-log.md) — record what you actually deployed
