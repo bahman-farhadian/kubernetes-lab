@@ -28,7 +28,7 @@ These are settled for the whole manual — later steps assume them rather than r
 
 | Area | Choice |
 |---|---|
-| OS | **Debian 13 ("Trixie") or Ubuntu 26 ("Resolute Raccoon")** on every VM of a given lab instance — do not mix distros inside one cluster. Apt commands are the same shape; where a repo URL or package name differs, the step says so. |
+| OS | **Debian 13 ("Trixie") or Ubuntu 26 ("Resolute Raccoon")** on every VM of a given lab instance — do not mix distros inside one cluster. Work **one distro at a time** (Debian first, then Ubuntu). Apt commands are the same shape; where a repo URL or package name differs, the step says so. |
 | Edge | Two-node keepalived firewall (`k8s-fw-1` / `k8s-fw-2`): WAN VIP + LAN VIP (default gateway). VRID is per instance. WAN numbering is site-local and is **not** recorded in this repo. The bastion HAProxy VIP is a separate LAN address — no keepalived on the bastion. |
 | Bootstrap tool | `kubeadm` (not k3s/RKE2/Kubespray) |
 | Container runtime | **containerd** on every Kubernetes node. **Docker Engine** exists only on `k8s-bastion`, as a single-node daemon for the Compose support stack. Do not install Docker on ctrl/workers. |

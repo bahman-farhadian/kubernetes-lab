@@ -54,7 +54,7 @@ Three independent instances of this lab, never joined together (they reuse the s
 
 ## Rollout plan
 
-1. **Light (laptop) — current task.** Walk 04–19 twice, once per etcd scenario (open [10-bootstrap-stacked.md](10-bootstrap-stacked.md) then [10-bootstrap-external.md](10-bootstrap-external.md)), including the upgrade exercise in [18-day2-operations.md](18-day2-operations.md). One distro per instance (Debian 13 **or** Ubuntu 26).
+1. **Light (laptop) — current task.** Walk 04–19 on **Debian 13 first**, then the same path on Ubuntu 26 — not both at once. One etcd scenario per pass (open [10-bootstrap-stacked.md](10-bootstrap-stacked.md) then later [10-bootstrap-external.md](10-bootstrap-external.md)), including [18-day2-operations.md](18-day2-operations.md).
 2. **Heavy (server)** — same spine, Heavy tables in [02-hardware-inventory.md](02-hardware-inventory.md).
 3. **GPU (server)** — Heavy plus `k8s-work-4` (joined in 11, OSD in 13) and [20-gpu-node.md](20-gpu-node.md).
 
