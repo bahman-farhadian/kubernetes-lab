@@ -1,4 +1,4 @@
-# 07. Bastion Docker (Nexus, Prometheus, Grafana)
+# 04. Bastion
 
 **Goal:** On `k8s-bastion` only, install a **single-node Docker Engine** and run **three separate Compose projects** — one directory and one `compose.yaml` each:
 
@@ -10,7 +10,7 @@
 
 Do **not** put all three in one Compose file. Upgrade and restart stay independent.
 
-kubelet/containerd/Ceph/keepalived/HAProxy stay **systemd** on their own VMs. Do not install Docker on control-plane or worker nodes.
+kubelet/containerd/Ceph/keepalived/HAProxy stay **systemd** on their own VMs. HAProxy is the API pair (`k8s-lb-1` / `k8s-lb-2`), not this VM. Do not install Docker on control-plane or worker nodes.
 
 The first `docker compose pull` for these three images still hits the internet (via the firewall pair). After Nexus is up, apt and **cluster** image pulls go through the cache.
 
@@ -22,19 +22,47 @@ Docker Engine on this VM is the host daemon for lab-support processes. It is not
 
 ## Steps — Docker Engine
 
-**1. Install a pinned Docker Engine** from Docker's apt repo (check [docs.docker.com](https://docs.docker.com/engine/install/) for Debian 13 / Ubuntu 26 before adding the repo):
+**1. Install a pinned Docker Engine** from Docker's apt repo. `docker-ce` is not in Debian or Ubuntu's own repos — `apt-cache madison docker-ce` is empty until this repo exists. Docker documents Debian 13 (Trixie) and Ubuntu Resolute 26.04; the suite comes from `/etc/os-release` so the same block covers both ([Debian](https://docs.docker.com/engine/install/debian/), [Ubuntu](https://docs.docker.com/engine/install/ubuntu/)).
 
 ```sh
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+. /etc/os-release
+case "$ID" in
+  debian)
+    DOCKER_URL=https://download.docker.com/linux/debian
+    DOCKER_SUITE=$VERSION_CODENAME
+    ;;
+  ubuntu)
+    DOCKER_URL=https://download.docker.com/linux/ubuntu
+    DOCKER_SUITE=${UBUNTU_CODENAME:-$VERSION_CODENAME}
+    ;;
+  *) echo "unsupported ID=$ID" >&2; exit 1 ;;
+esac
+sudo curl -fsSL "$DOCKER_URL/gpg" -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: ${DOCKER_URL}
+Suites: ${DOCKER_SUITE}
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+sudo apt update
 apt-cache madison docker-ce docker-ce-cli containerd.io docker-compose-plugin
-DOCKER_CE_VERSION="<version from madison>"
+DOCKER_CE_VERSION="<version from madison>"          # docker-ce and docker-ce-cli share this string
+CONTAINERD_IO_VERSION="<containerd.io from madison>"
+COMPOSE_PLUGIN_VERSION="<docker-compose-plugin from madison>"
 sudo apt install -y docker-ce=${DOCKER_CE_VERSION} docker-ce-cli=${DOCKER_CE_VERSION} \
-  containerd.io=<matching> docker-compose-plugin=<matching>
+  containerd.io=${CONTAINERD_IO_VERSION} docker-compose-plugin=${COMPOSE_PLUGIN_VERSION}
 sudo apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin
 sudo systemctl enable --now docker
 sudo docker info
 ```
 
-`containerd.io` here is Docker's runtime on the **bastion only**. Cluster nodes use distro `containerd` from [08-container-runtime.md](08-container-runtime.md).
+`containerd.io` here is Docker's runtime on the **bastion only**. Cluster nodes use distro `containerd` from [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
 
 ```sh
 sudo mkdir -p /opt/nexus /opt/prometheus /opt/grafana
@@ -70,7 +98,7 @@ First start can take a minute. Change the admin password in the UI (`http://k8s-
 
 ## Steps — `/opt/prometheus`
 
-`/opt/prometheus/prometheus.yml` — scrape every node in the [05-os-baseline.md](05-os-baseline.md) hosts file (example LAN). External etcd: drop `.14`, add `.15/.16/.17`. GPU: add `.24`. Targets stay `DOWN` until [15-observability.md](15-observability.md) installs `node_exporter`.
+`/opt/prometheus/prometheus.yml` — scrape every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15/.16/.17`. GPU: add `.24`. Targets stay `DOWN` until [09-observability.md](09-observability.md) installs `node_exporter`.
 
 ```yaml
 global:
@@ -81,6 +109,8 @@ scrape_configs:
       - targets:
           - 10.0.1.1:9100
           - 10.0.1.2:9100
+          - 10.0.1.8:9100
+          - 10.0.1.9:9100
           - 10.0.1.11:9100
           - 10.0.1.12:9100
           - 10.0.1.13:9100
@@ -142,8 +172,6 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000
 
 Datasource URL from inside Grafana: `http://host.docker.internal:9090`. From a browser on the LAN: `http://k8s-bastion:3000`.
 
-HAProxy stays **systemd** in [09-load-balancer.md](09-load-balancer.md).
-
 ## Steps — Nexus proxy repositories
 
 Create apt proxies for the distro of *this* cluster only, plus docker proxies. Enable a LAN HTTP docker connector on **8082**.
@@ -162,10 +190,10 @@ Create apt proxies for the distro of *this* cluster only, plus docker proxies. E
 
 **Apt** on every other node — URI host `http://k8s-bastion:8081/repository/<name>/`. Keep upstream `signed-by` keyrings.
 
-**containerd mirrors** on ctrl/workers — [08-container-runtime.md](08-container-runtime.md).
+**containerd mirrors** on ctrl/workers — [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
 
 ## Prerequisites
-- [06-firewall.md](06-firewall.md)
+- [03-firewall.md](03-firewall.md)
 
 ## Next
-- [08-container-runtime.md](08-container-runtime.md)
+- [05-deploy-kubernetes.md](05-deploy-kubernetes.md)

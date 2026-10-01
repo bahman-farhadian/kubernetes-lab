@@ -6,7 +6,7 @@
 - Purpose: build a production-like, highly-available Kubernetes cluster for hands-on learning.
 - Learning focus: HA control plane, networking, storage (Ceph), security, day-2 operations.
 - Out of scope: VM/host provisioning. This repo assumes the VMs already exist (created manually, via Ansible, via a cloud provider, or any other method) and are reachable over SSH with a base OS installed.
-- Two supported topologies, chosen up front in [01-scenarios.md](01-scenarios.md).
+- Two supported topologies, chosen up front in [Scenarios](#scenarios).
 - Three deployment profiles (below), each its own independent instance of this lab, never joined together.
 - Style: manual, step-by-step, real commands — short enough to read end to end and understand what's happening, so you can later drive the same cluster with kubeadm scripted, Kubespray, or any other automation with eyes open.
 
@@ -16,11 +16,11 @@ Named so a run and its docs/logs can be referred to unambiguously — always say
 
 | Profile | Host | Nodes |
 |---|---|---|
-| **Light** | Laptop | 2 firewalls, combined bastion (jump + HAProxy + Nexus + Prometheus/Grafana), 3 control-plane, 3 workers |
+| **Light** | Laptop | 2 firewalls, 2 API load balancers, bastion (jump + kubectl/Helm + Nexus + Prometheus/Grafana), 3 control-plane, 3 workers |
 | **Heavy** | Server | Same shape as Light, bigger nodes |
 | **GPU** | Server | Heavy + `k8s-work-4` (NVIDIA, passed-through, tainted) |
 
-One procedure spine (`04`–`19`) covers all three; circle the matching table in [02-hardware-inventory.md](02-hardware-inventory.md) and, at step 10, open [10-bootstrap-stacked.md](10-bootstrap-stacked.md) or [10-bootstrap-external.md](10-bootstrap-external.md). GPU adds [20-gpu-node.md](20-gpu-node.md). See [README.md](README.md#layout) and [01-scenarios.md](01-scenarios.md). **Deploy in this order: Light first (both scenarios), then Heavy, then GPU** — see [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [21-deployment-log.md](21-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
+Circle the matching table in [01-inventory.md](01-inventory.md), then walk [02-prepare.md](02-prepare.md) through [10-smoke-test.md](10-smoke-test.md). Inside [05-deploy-kubernetes.md](05-deploy-kubernetes.md), open one bootstrap (stacked or external). GPU adds [13-gpu.md](13-gpu.md). See [README.md](README.md#layout). **Deploy in this order: Light first (both scenarios), then Heavy, then GPU** — see [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [14-deployment-log.md](14-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
 
 ## Fixed decisions
 
@@ -29,22 +29,22 @@ These are settled for the whole manual — later steps assume them rather than r
 | Area | Choice |
 |---|---|
 | OS | **Debian 13 ("Trixie") or Ubuntu 26 ("Resolute Raccoon")** on every VM of a given lab instance — do not mix distros inside one cluster. Work **one distro at a time** (Debian first, then Ubuntu). Apt commands are the same shape; where a repo URL or package name differs, the step says so. |
-| Edge | Two-node keepalived firewall (`k8s-fw-1` / `k8s-fw-2`): WAN VIP + LAN VIP (default gateway). VRID is per instance. WAN numbering is site-local and is **not** recorded in this repo. The bastion HAProxy VIP is a separate LAN address — no keepalived on the bastion. |
+| Edge | Two keepalived pairs, each with its own VRID. Firewalls `k8s-fw-1` / `k8s-fw-2`: WAN VIP + LAN VIP (default gateway). API proxies `k8s-lb-1` / `k8s-lb-2`: HAProxy on a floating API VIP. The bastion is not in either pair. WAN numbering is site-local and is **not** recorded in this repo. |
 | Bootstrap tool | `kubeadm` (not k3s/RKE2/Kubespray) |
 | Container runtime | **containerd** on every Kubernetes node. **Docker Engine** exists only on `k8s-bastion`, as a single-node daemon for the Compose support stack. Do not install Docker on ctrl/workers. |
-| CNI | Calico (NetworkPolicy support, needed in [17-security-hardening.md](17-security-hardening.md)) |
+| CNI | Calico (NetworkPolicy support, needed in [11-security.md](11-security.md)) |
 | Storage | Ceph, installed as native `apt` packages on the OS (not Rook) + Ceph-CSI inside the cluster |
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
-| Bastion support plane | Nexus + Prometheus + Grafana as **Docker Compose** on `k8s-bastion` ([07-nexus.md](07-nexus.md)). HAProxy and `node_exporter` stay systemd. |
+| Bastion support plane | Nexus + Prometheus + Grafana as **Docker Compose** on `k8s-bastion` ([04-bastion.md](04-bastion.md)). `kubectl` and Helm 3 are installed there during [05-deploy-kubernetes.md](05-deploy-kubernetes.md). API HAProxy is **not** on this VM. `node_exporter` stays systemd on every VM. |
 | Cache | Nexus (in that Compose stack) proxies apt and container registries so each object is fetched from the internet once. |
-| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there — [20-gpu-node.md](20-gpu-node.md) |
+| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there — [13-gpu.md](13-gpu.md) |
 | Container-count philosophy | Kubernetes and Ceph are systemd + containerd on cluster nodes (kubeadm model). Lab-support apps that must stay *outside* the cluster (Nexus, Prometheus, Grafana) run as Compose on a non-k8s VM whose host daemon is Docker. Do not put those apps in-cluster, and do not put Docker next to kubelet. |
 
 ## Version pinning and the upgrade exercise
 
 Every package this manual installs for the cluster to function (`containerd`, `kubelet`, `kubeadm`, `kubectl`, `haproxy`, `keepalived`, `ceph-*`, `etcd-*`, `docker-ce` on the bastion, `prometheus-node-exporter`, …) is installed at an **exact pinned version** (`apt install pkg=<version>`, never a bare `apt install pkg`) and `apt-mark hold`ed right after. Compose images (`sonatype/nexus3`, `prom/prometheus`, `grafana/grafana`) are pinned by **tag** in `compose.yaml`, not by apt. A plain `apt upgrade`/`unattended-upgrades` run must never be able to silently bump a component that could break the cluster or change its behavior underneath you.
 
-This pinning is deliberate for a second reason, not just safety: **Kubernetes, Ceph, and Calico are each deployed one version behind current stable** (steps 10/11 for Kubernetes, step 12 for Calico, step 13 for Ceph), specifically so there's a real version to upgrade *to*. [18-day2-operations.md](18-day2-operations.md) walks that cluster through the upgrade, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle for every node (Calico has no apt package/hold, but the same "deploy old, upgrade deliberately" shape applies via its operator manifest version). Staying current matters here, not just as an exercise: an untouched cluster silently ages out of its security-support window. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
+This pinning is deliberate for a second reason, not just safety: **Kubernetes, Ceph, and Calico are each deployed one version behind current stable** ([05-deploy-kubernetes.md](05-deploy-kubernetes.md) for Kubernetes and Calico, [07-ceph.md](07-ceph.md) for Ceph), specifically so there's a real version to upgrade *to*. [06-update-kubernetes.md](06-update-kubernetes.md) and the upgrade section of [07-ceph.md](07-ceph.md) walk that, component by component, using the same unhold → install exact new pinned version → verify → re-hold cycle (Calico has no apt package/hold; the same shape applies via its operator manifest version). Staying current matters here, not just as an exercise: an untouched cluster silently ages out of its security-support window. That upgrade walkthrough is as much the point of this lab as the initial bootstrap is.
 
 **Checked 2026-09** (Kubernetes has no LTS track — it ships a new minor roughly every 4 months and supports the 3 most recent; Ceph ships a new stable release roughly once a year, in support until the next-next one ships; Calico ships patch releases frequently within a minor):
 
@@ -54,7 +54,20 @@ This pinning is deliberate for a second reason, not just safety: **Kubernetes, C
 | Ceph | Squid v19.x (latest 19.2.6) — **EOL 2026-10-31**, don't linger on it | Tentacle v20.x (latest 20.2.4) | [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) |
 | Calico | v3.31.7 (one minor behind) | v3.32.2 (current stable) | [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases) |
 
-Re-check all three before you actually run the steps — this table is a snapshot, not a promise. Debian 13/Trixie's own `ceph-common` (`18.2.7+ds-1+deb13u1`, Reef) is already past Reef's upstream end of life, and Ceph's official [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) rate Debian 13 tier "C" (packages exist, untested by the Ceph project) — [13-storage-ceph.md](13-storage-ceph.md) has the fallback plan if `download.ceph.com`'s Trixie repo doesn't cooperate.
+Re-check all three before you actually run the steps — this table is a snapshot, not a promise. Debian 13/Trixie's own `ceph-common` (`18.2.7+ds-1+deb13u1`, Reef) is already past Reef's upstream end of life, and Ceph's official [OS recommendations](https://docs.ceph.com/en/latest/start/os-recommendations/) rate Debian 13 tier "C" (packages exist, untested by the Ceph project) — [07-ceph.md](07-ceph.md) has the fallback plan if `download.ceph.com`'s Trixie repo doesn't cooperate.
+
+## Scenarios
+
+Pick one before provisioning. It changes the node count and which bootstrap section you open in [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
+
+| | Stacked etcd | External etcd |
+|---|---|---|
+| Control-plane VMs | 3 (etcd on each) | 2 (apiserver only) |
+| Dedicated etcd VMs | 0 | 3 |
+| Failure isolation | etcd and apiserver fail together | independent |
+| Bootstrap section | Stacked | External |
+
+Stacked is the simpler path and the one to build first. External costs more VMs and uses a native `etcd-server` package rather than kubeadm's static-pod etcd. Official kubeadm external etcd is 3 control planes plus 3 etcd nodes running etcd as a static pod; this lab keeps 2 apiservers and distro etcd on purpose.
 
 ## Diagram color legend
 

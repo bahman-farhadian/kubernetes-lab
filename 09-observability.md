@@ -1,12 +1,12 @@
-# 15. Observability
+# 09. Observability
 
-**Goal:** Export host metrics from every node. Prometheus and Grafana are already running as Compose services on `k8s-bastion` from [07-nexus.md](07-nexus.md). This step is the **node_exporter** agents plus a Grafana dashboard. No in-cluster kube-state-metrics or logging stack.
+**Goal:** Export host metrics from every node. Prometheus and Grafana are already running as Compose services on `k8s-bastion` from [04-bastion.md](04-bastion.md). This step is the **node_exporter** agents plus a Grafana dashboard. No in-cluster kube-state-metrics or logging stack.
 
 `node_exporter` is a **systemd** package on every VM (including the bastion). It needs the host's `/proc` and `/sys`; do not put it in the Compose file.
 
 ## Steps
 
-**1. `node_exporter` on every node** in the [05-os-baseline.md](05-os-baseline.md) hosts block (firewalls, bastion, control-plane, etcd if present, workers):
+**1. `node_exporter` on every node** in the [02-prepare.md](02-prepare.md) hosts block (firewalls, bastion, control-plane, etcd if present, workers):
 ```sh
 sudo apt update
 apt-cache madison prometheus-node-exporter
@@ -28,8 +28,8 @@ Every node_exporter target should be `"up"`. If a target is missing, edit `/opt/
 > Host disk via node_exporter, not Ceph pool internals. `ceph mgr module enable prometheus` is out of scope here.
 
 ## Prerequisites
-- [14-ingress.md](14-ingress.md)
-- [07-nexus.md](07-nexus.md) — Compose stack already up
+- [08-ingress.md](08-ingress.md)
+- [04-bastion.md](04-bastion.md) — Compose stack already up
 
 ## Next
-- [16-smoke-test.md](16-smoke-test.md)
+- [10-smoke-test.md](10-smoke-test.md)

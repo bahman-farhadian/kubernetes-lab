@@ -1,4 +1,4 @@
-# 14. Ingress
+# 08. Ingress
 
 **Goal:** Expose services outside the cluster.
 
@@ -6,7 +6,7 @@
 
 ## Steps
 
-**1. Install a pinned Traefik chart version via Helm** (check [github.com/traefik/traefik-helm-chart](https://github.com/traefik/traefik-helm-chart) for the current version list):
+**1. On `k8s-bastion`** (Helm and kubeconfig from [05-deploy-kubernetes.md](05-deploy-kubernetes.md)), install a pinned Traefik chart version (check [github.com/traefik/traefik-helm-chart](https://github.com/traefik/traefik-helm-chart) for the current version list):
 ```sh
 helm repo add traefik https://traefik.github.io/charts && helm repo update
 helm search repo traefik/traefik --versions | head   # pick an exact chart version
@@ -16,16 +16,16 @@ helm install traefik traefik/traefik -n traefik --version "${TRAEFIK_CHART_VERSI
 ```
 Helm has no `apt-mark hold` equivalent — the pin *is* the control: only ever `helm upgrade` this release with an explicit `--version` you chose deliberately, never omit it.
 
-**2. Expose it** — since there's no cloud LoadBalancer here, use a `NodePort` (or `hostNetwork`) Service and point the HAProxy on `k8s-bastion` at it, the same way it already fronts the apiserver in [09-load-balancer.md](09-load-balancer.md):
+**2. Expose it** — since there's no cloud LoadBalancer here, use a `NodePort` (or `hostNetwork`) Service and point HAProxy on the API pair (`k8s-lb-1` / `k8s-lb-2`) at it. Add the frontends to the same `haproxy.cfg` that already binds `10.0.1.10:6443`:
 ```sh
 kubectl get svc -n traefik   # note the NodePort for 80/443
 ```
-Add a second HAProxy frontend/backend pair on the bastion for ports 80/443, backending to `<worker-ip>:<NodePort>` for each worker.
+On **both** load-balancer nodes, add frontend/backend pairs for ports 80 and 443, backending to `<worker-ip>:<NodePort>` for each worker, then `sudo systemctl reload haproxy`. `ip_nonlocal_bind` from the API section already covers these binds.
 
 **3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` through the bastion.
 
 ## Prerequisites
-- [13-storage-ceph.md](13-storage-ceph.md)
+- [07-ceph.md](07-ceph.md)
 
 ## Next
-- [15-observability.md](15-observability.md)
+- [09-observability.md](09-observability.md)

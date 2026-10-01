@@ -1,4 +1,4 @@
-# 16. Smoke & Stress Test
+# 10. Smoke test
 
 **Goal:** Prove the cluster actually works under load, not just that pods schedule — deploy a small nginx workload plus a scalable Debian `stress-ng` workload, ramp the second one up until the cluster is genuinely using roughly 80% of its worker capacity, watch it hold there via Grafana, then tear everything down cleanly.
 
@@ -86,9 +86,9 @@ spec:
 kubectl apply -f smoketest-nginx.yaml
 kubectl -n smoke-test rollout status deployment/smoketest-nginx
 ```
-Verify through the same bastion HAProxy path as [14-ingress.md](14-ingress.md):
+Verify through the API pair's port 80, added in [08-ingress.md](08-ingress.md):
 ```sh
-curl -H "Host: smoketest.lab.local" http://10.0.1.11/   # expect the nginx welcome page
+curl -H "Host: smoketest.lab.local" http://10.0.1.10/   # API pair VIP, port 80 — expect the nginx welcome page
 ```
 
 **4. Deploy the scalable Debian stress workload**, starting at 0 replicas — sizing (`cpu`/`memory` request=limit) matched to `stress-ng`'s flags so requested capacity and actual usage track each other:
@@ -140,7 +140,7 @@ kubectl -n smoke-test scale deployment/smoketest-stress --replicas=12
 sleep 60
 kubectl -n smoke-test scale deployment/smoketest-stress --replicas=16   # or wherever your step-2 math landed
 ```
-Watch actual usage climb on the "Node Exporter Full" Grafana dashboard from [15-observability.md](15-observability.md) — that's real usage, not just requests. If any pod stays `Pending`, `kubectl describe pod` it: you've hit the requested-capacity ceiling before reaching your live-usage target, which is itself a useful data point about how much headroom Ceph/Calico's own requests actually leave.
+Watch actual usage climb on the "Node Exporter Full" Grafana dashboard from [09-observability.md](09-observability.md) — that's real usage, not just requests. If any pod stays `Pending`, `kubectl describe pod` it: you've hit the requested-capacity ceiling before reaching your live-usage target, which is itself a useful data point about how much headroom Ceph/Calico's own requests actually leave.
 
 **6. Hold at ~80% for a few minutes and confirm nothing else broke:**
 ```sh
@@ -159,8 +159,8 @@ kubectl delete namespace smoke-test                                    # then re
 Confirm on Grafana that CPU/memory on all workers drops back to baseline within a minute or two.
 
 ## Prerequisites
-- [15-observability.md](15-observability.md) — you'll want Grafana open while this runs
-- [14-ingress.md](14-ingress.md)
+- [09-observability.md](09-observability.md) — you'll want Grafana open while this runs
+- [08-ingress.md](08-ingress.md)
 
 ## Next
-- [17-security-hardening.md](17-security-hardening.md)
+- [11-security.md](11-security.md)

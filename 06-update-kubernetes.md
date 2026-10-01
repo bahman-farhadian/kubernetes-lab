@@ -1,6 +1,6 @@
-# 18. Day-2 Operations
+# 06. Update Kubernetes
 
-**Goal:** Operate the cluster after initial bootstrap — most importantly, prove the pin-and-hold policy actually works by deliberately upgrading the whole cluster, one held component at a time, from the version deployed in steps 10–13 to a newer pinned version.
+**Goal:** Upgrade Kubernetes, Calico, and (external etcd only) the etcd packages, one held component at a time, from the versions deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Ceph's upgrade is [07-ceph.md](07-ceph.md).
 
 **Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `docker-ce` on the bastion, `prometheus-node-exporter`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
 
@@ -8,7 +8,7 @@ Compose on the bastion: change the image tag in **that app's** file only (`/opt/
 
 ## Steps — Kubernetes minor upgrade
 
-Deployed on `KUBE_DEPLOY_VERSION` (steps 10/11). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
+Deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
 
 **1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
 ```sh
@@ -75,7 +75,7 @@ kubectl get nodes -o wide   # every node on the new version, all Ready
 
 ## Steps — Calico upgrade
 
-Deployed on `CALICO_DEPLOY_VERSION` (step 10). Operator-based installs upgrade by re-applying a newer operator manifest — you don't re-apply `custom-resources.yaml`, since that could reset your pod-CIDR/config back to its defaults; the operator reconciles the rest on its own.
+Deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Operator-based installs upgrade by re-applying a newer operator manifest — you don't re-apply `custom-resources.yaml`, since that could reset your pod-CIDR/config back to its defaults; the operator reconciles the rest on its own.
 
 **1. Check the target release's notes** for anything manual (rare within the same major, but check) at [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases), then apply the new operator manifest:
 ```sh
@@ -97,7 +97,7 @@ kubectl get tigerastatus -o yaml | grep -A2 "reason: Success"
 
 ## Steps — etcd cluster upgrade (external etcd only)
 
-Skip this section for stacked etcd — `kubeadm upgrade` already bumps etcd's static-pod image. External etcd is a plain apt package independent of Kubernetes' own version, so it needs its own upgrade, same "one node at a time, verify quorum" discipline as Ceph mons below.
+Skip this section for stacked etcd — `kubeadm upgrade` already bumps etcd's static-pod image. External etcd is a plain apt package independent of Kubernetes' own version, so it needs its own upgrade, same "one node at a time, verify quorum" discipline as the Ceph mon upgrade in [07-ceph.md](07-ceph.md).
 
 **1. Pick a new pinned version** (on `k8s-etcd-1`):
 ```sh
@@ -119,69 +119,15 @@ etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1
 ```
 Repeat on `k8s-etcd-2`, then `k8s-etcd-3`. A mixed-version quorum mid-rollout is expected and safe.
 
-## Steps — Ceph release upgrade
-
-Deployed on `CEPH_DEPLOY_RELEASE`/`CEPH_DEPLOY_VERSION` (step 11) — Squid (v19.x), current as of 2026-09 but scheduled to reach end of life 2026-10-31, so don't sit on it indefinitely; this exercise upgrades to Tentacle (v20.x). Order matters: **mons (one at a time) → mgrs → OSDs (one node at a time)**. Check the target release's own upgrade notes on [docs.ceph.com](https://docs.ceph.com/en/latest/releases/) first — some releases require an extra step (e.g. `ceph osd require-osd-release <name>`) once every daemon is upgraded, not assumed here since it depends which two releases you're moving between.
-
-**1. Point at the new release's repo** (all OSD nodes):
-```sh
-CEPH_UPGRADE_RELEASE=tentacle   # v20.x — current stable as of 2026-09 (20.2.4); reverify at docs.ceph.com/en/latest/releases
-sudo sed -i "s/debian-${CEPH_DEPLOY_RELEASE}/debian-${CEPH_UPGRADE_RELEASE}/" /etc/apt/sources.list.d/ceph.list
-sudo apt update
-apt-cache madison ceph-common
-CEPH_UPGRADE_VERSION="20.2.4-1~$(lsb_release -sc)"   # confirm this exact string against the madison output above
-```
-
-**2. Prevent rebalancing churn** while daemons briefly restart (from any node):
-```sh
-sudo ceph osd set noout
-```
-
-**3. Upgrade mons, one node at a time** — verify quorum before moving to the next:
-```sh
-sudo apt-mark unhold ceph-mon ceph-common
-sudo apt install -y ceph-mon=${CEPH_UPGRADE_VERSION} ceph-common=${CEPH_UPGRADE_VERSION}
-sudo apt-mark hold ceph-mon ceph-common
-sudo systemctl restart ceph-mon@k8s-work-1
-sudo ceph -s   # confirm quorum intact before touching k8s-work-2
-```
-Repeat on `k8s-work-2`, then `k8s-work-3`. A mixed-version mon quorum during this rolling upgrade is expected and safe.
-
-**4. Upgrade mgrs, one node at a time:**
-```sh
-sudo apt-mark unhold ceph-mgr
-sudo apt install -y ceph-mgr=${CEPH_UPGRADE_VERSION}
-sudo apt-mark hold ceph-mgr
-sudo systemctl restart ceph-mgr@k8s-work-1
-```
-Repeat on the other two; `ceph -s` shows the active mgr fail over to a standby momentarily — expected.
-
-**5. Upgrade OSDs, one node at a time:**
-```sh
-sudo apt-mark unhold ceph-osd
-sudo apt install -y ceph-osd=${CEPH_UPGRADE_VERSION}
-sudo apt-mark hold ceph-osd
-sudo systemctl restart ceph-osd@$(ls /var/lib/ceph/osd | grep -oP 'ceph-\K[0-9]+')
-sudo ceph -s   # HEALTH_OK (or HEALTH_WARN with noout set) before moving to the next node
-```
-Repeat on the other workers (including `k8s-work-4` on GPU).
-
-**6. Clear `noout` and do a final check:**
-```sh
-sudo ceph osd unset noout
-sudo ceph versions   # every daemon should report the new version
-sudo ceph -s          # HEALTH_OK
-```
-
 ## Also covers
 - etcd backup and restore:
   - **Stacked:** all 3 members live in `/var/lib/etcd` on `k8s-ctrl-1/2/3` — `etcdctl snapshot save` against any member
-  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [10-bootstrap-external.md](10-bootstrap-external.md) step 2, separate from Kubernetes' PKI
+  - **External:** `etcdctl snapshot save` directly against any `k8s-etcd-*` node (no `kubectl exec`; this etcd is a plain systemd service). Etcd's CA is the one from [05-deploy-kubernetes.md](05-deploy-kubernetes.md) step 2, separate from Kubernetes' PKI
 - Adding/removing control-plane, etcd, and worker nodes
 - Certificate rotation
 
 ## Prerequisites
-- [17-security-hardening.md](17-security-hardening.md)
+- [05-deploy-kubernetes.md](05-deploy-kubernetes.md)
 
 ## Next
-- [19-troubleshooting.md](19-troubleshooting.md)
+- [07-ceph.md](07-ceph.md)

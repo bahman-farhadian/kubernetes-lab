@@ -1,6 +1,6 @@
-# 06. Firewall pair
+# 03. Firewall pair
 
-**Goal:** Put a two-node keepalived firewall in front of the LAN so the cluster has a redundant default gateway and a single WAN entry. The apiserver VIP on the bastion ([09-load-balancer.md](09-load-balancer.md)) is a separate address; do not merge the two.
+**Goal:** Put a two-node keepalived firewall in front of the LAN so the cluster has a redundant default gateway and a single WAN entry. The API VIP (`10.0.1.10`) is a second keepalived pair, `k8s-lb-1` / `k8s-lb-2`, in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Do not put that VIP on these firewalls, and do not reuse this VRID for it — both pairs speak VRRP on the same LAN.
 
 **Applies to:** `k8s-fw-1` and `k8s-fw-2` only. Not a Kubernetes node — no kubelet, no containerd.
 
@@ -10,7 +10,7 @@ WAN addresses, WAN VIP, and VRID are **site-local**. This file uses variables. D
 WAN_IF=eth0                 # NIC that faces upstream
 LAN_IF=eth1                 # NIC on the cluster LAN (10.0.1.0/24 in the example tables)
 WAN_VIP="<your WAN VIP>"    # keepalived address on $WAN_IF
-LAN_VIP=10.0.1.254          # example LAN gateway — must match [05-os-baseline.md](05-os-baseline.md)
+LAN_VIP=10.0.1.254          # example LAN gateway — must match [02-prepare.md](02-prepare.md)
 VRID=60                     # unique per lab instance on a shared L2; pick another if 60 is taken
 ```
 
@@ -77,9 +77,10 @@ sudo systemctl enable --now keepalived
 ip -br addr show   # MASTER should show both VIPs; BACKUP should not
 ```
 
-**4. Forward LAN → WAN** (both nodes; nftables). This is a lab NAT, not a hardened edge policy:
+**4. Forward LAN → WAN** (both nodes; nftables). This is a lab NAT, not a hardened edge policy. A minimal install does not ship the `nft` binary — the package is `nftables` on Debian 13 and Ubuntu 26. Docker stays off these VMs: Docker's install docs do not support an `nft` ruleset on a host that runs Docker Engine, which is why NAT lives here and Docker lives on the bastion.
 
 ```sh
+sudo apt install -y nftables
 sudo nft add table ip nat
 sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }'
 sudo nft add rule ip nat postrouting oifname "$WAN_IF" masquerade
@@ -92,13 +93,18 @@ sudo nft add rule ip filter forward iifname "$WAN_IF" oifname "$LAN_IF" ct state
 
 Persist with `nft list ruleset | sudo tee /etc/nftables.conf` and `sudo systemctl enable nftables` (package name is `nftables` on both Debian 13 and Ubuntu 26).
 
-**5. Point the cluster at the LAN VIP** — default gateway `10.0.1.254` on every non-firewall VM (already called out in [05-os-baseline.md](05-os-baseline.md)). From a worker:
+**5. Point the cluster at the LAN VIP** — on every **non-firewall** VM, replace the temporary default route from [02-prepare.md](02-prepare.md) with `10.0.1.254`. Do this only after step 3 shows the VIP on the MASTER.
 
 ```sh
-ip route | grep default    # via 10.0.1.254
+IFACE=$(ip -br addr show | awk '/10\.0\.1\./ {print $1; exit}')
+echo "LAN iface: $IFACE"    # confirm before changing the default route
+sudo ip route replace default via 10.0.1.254 dev "$IFACE"
+ip route | grep default      # via 10.0.1.254
 ping -c1 10.0.1.254
 curl -sI https://deb.debian.org | head -1   # or https://archive.ubuntu.com — outbound via the pair
 ```
+
+Persist it or the next reboot goes back to the temporary gateway (or nowhere). ifupdown: on the stanza that already has this VM's `10.0.1.0/24` address, set `gateway 10.0.1.254` and delete any other `gateway` line. NetworkManager: `nmcli con modify <connection> ipv4.gateway 10.0.1.254 && nmcli con up <connection>`.
 
 Failover check: `sudo systemctl stop keepalived` on MASTER; VIPs must appear on BACKUP within a couple of seconds; restore keepalived on MASTER afterward.
 
@@ -118,7 +124,7 @@ flowchart LR
 ```
 
 ## Prerequisites
-- [05-os-baseline.md](05-os-baseline.md)
+- [02-prepare.md](02-prepare.md)
 
 ## Next
-- [07-nexus.md](07-nexus.md)
+- [04-bastion.md](04-bastion.md)
