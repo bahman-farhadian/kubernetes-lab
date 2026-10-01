@@ -98,7 +98,7 @@ First start can take a minute. Change the admin password in the UI (`http://k8s-
 
 ## Steps — `/opt/prometheus`
 
-`/opt/prometheus/prometheus.yml` — scrape every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15/.16/.17`. GPU: add `.24`. Targets stay `DOWN` until [09-observability.md](09-observability.md) installs `node_exporter`.
+`/opt/prometheus/prometheus.yml` — scrape every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15/.16/.17`. GPU: add `.24`. Targets stay `DOWN` until [08-observability.md](08-observability.md) installs `node_exporter`.
 
 ```yaml
 global:

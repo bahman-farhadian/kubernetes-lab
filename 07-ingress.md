@@ -1,4 +1,4 @@
-# 08. Ingress
+# 07. Ingress
 
 **Goal:** Expose services outside the cluster.
 
@@ -25,7 +25,7 @@ On **both** load-balancer nodes, add frontend/backend pairs for ports 80 and 443
 **3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` through the bastion.
 
 ## Prerequisites
-- [07-ceph.md](07-ceph.md)
+- [06-ceph.md](06-ceph.md)
 
 ## Next
-- [09-observability.md](09-observability.md)
+- [08-observability.md](08-observability.md)

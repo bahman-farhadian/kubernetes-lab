@@ -23,7 +23,7 @@ LAN addresses here are **examples**. Use your own when you provision. Do not com
 - **Bastion** `10.0.1.11`: jump host, Nexus, Prometheus, Grafana, `kubectl`, Helm. No API VIP on this VM.
 - **DNS:** static `/etc/hosts` on every node ([02-prepare.md](02-prepare.md)). No cluster DNS server for node names.
 - **Kubernetes ranges** (must not overlap the LAN): pod CIDR `192.168.0.0/16`, service CIDR `10.96.0.0/12`.
-- **Ports:** `6443` (apiserver, via the API VIP), `80`/`443` (ingress, same VIP, added in [08-ingress.md](08-ingress.md)), `8081`/`8082` (Nexus), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on the bastion). VRRP is protocol 112, once for the firewall pair and once for the API pair.
+- **Ports:** `6443` (apiserver, via the API VIP), `80`/`443` (ingress, same VIP, added in [07-ingress.md](07-ingress.md)), `8081`/`8082` (Nexus), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on the bastion). VRRP is protocol 112, once for the firewall pair and once for the API pair.
 - First Nexus fill goes out through the firewall NAT. After [04-bastion.md](04-bastion.md), apt and image pulls can use the bastion cache.
 
 ```mermaid
@@ -136,7 +136,7 @@ Everything in Heavy above, plus:
 | | **VM TOTALS (12 VMs)** | | | **28** | **130 GB** | **270 GB** | **800 GB** |
 | | **PC AS PREVIOUSLY STATED** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
 
-`k8s-work-4` is a VM with the GPU passed through. Hypervisor IOMMU setup is out of scope. The node is tainted. Driver and device plugin: [13-gpu.md](13-gpu.md).
+`k8s-work-4` is a VM with the GPU passed through. Hypervisor IOMMU setup is out of scope. The node is tainted. Driver and device plugin: [14-gpu.md](14-gpu.md).
 
 ### Heavy/GPU — Scenario B (External etcd)
 

@@ -1,4 +1,4 @@
-# 09. Observability
+# 08. Observability
 
 **Goal:** Export host metrics from every node. Prometheus and Grafana are already running as Compose services on `k8s-bastion` from [04-bastion.md](04-bastion.md). This step is the **node_exporter** agents plus a Grafana dashboard. No in-cluster kube-state-metrics or logging stack.
 
@@ -28,8 +28,8 @@ Every node_exporter target should be `"up"`. If a target is missing, edit `/opt/
 > Host disk via node_exporter, not Ceph pool internals. `ceph mgr module enable prometheus` is out of scope here.
 
 ## Prerequisites
-- [08-ingress.md](08-ingress.md)
+- [07-ingress.md](07-ingress.md)
 - [04-bastion.md](04-bastion.md) — Compose stack already up
 
 ## Next
-- [10-smoke-test.md](10-smoke-test.md)
+- [09-smoke-test.md](09-smoke-test.md)

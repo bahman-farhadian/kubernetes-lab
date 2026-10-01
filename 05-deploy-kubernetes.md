@@ -176,7 +176,7 @@ Open this file only if you circled **Scenario A (stacked etcd)** in [01-inventor
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [06-update-kubernetes.md](06-update-kubernetes.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [11-update-kubernetes.md](11-update-kubernetes.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -410,7 +410,7 @@ etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1
 ```
 All 3 must report healthy before continuing.
 
-**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — deliberately one minor behind current stable so [06-update-kubernetes.md](06-update-kubernetes.md) has a real upgrade to practice:
+**5. Install kubelet/kubeadm/kubectl on `k8s-ctrl-1/2` only** — deliberately one minor behind current stable so [11-update-kubernetes.md](11-update-kubernetes.md) has a real upgrade to practice:
 ```sh
 KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
 sudo mkdir -p /etc/apt/keyrings
@@ -574,7 +574,7 @@ sudo kubeadm join 10.0.1.10:6443 --token <token> \
 ```
 Token expired or lost? Generate a new one from `k8s-ctrl-1`: `sudo kubeadm token create --print-join-command`.
 
-**GPU profile:** also join `k8s-work-4` here (same commands). Driver, device plugin, and taint are [13-gpu.md](13-gpu.md), after the rest of the cluster is up.
+**GPU profile:** also join `k8s-work-4` here (same commands). Driver, device plugin, and taint are [14-gpu.md](14-gpu.md), after the rest of the cluster is up.
 
 **3. Verify** from `k8s-bastion` (`kubectl` and kubeconfig from the bootstrap section above):
 ```sh
@@ -600,7 +600,7 @@ flowchart LR
 
 **Goal:** Install a CNI plugin so nodes go `Ready` and pods get networking.
 
-**Choice:** Calico — supports `NetworkPolicy` (used in [11-security.md](11-security.md)) and matches the `192.168.0.0/16` pod CIDR set in the bootstrap above. Same reasoning as Kubernetes/Ceph applies here too: deployed one release behind current stable, so [06-update-kubernetes.md](06-update-kubernetes.md) has a real Calico upgrade to walk through, not just a pin-and-forget.
+**Choice:** Calico — supports `NetworkPolicy` (used in [10-security.md](10-security.md)) and matches the `192.168.0.0/16` pod CIDR set in the bootstrap above. Same reasoning as Kubernetes/Ceph applies here too: deployed one release behind current stable, so [11-update-kubernetes.md](11-update-kubernetes.md) has a real Calico upgrade to walk through, not just a pin-and-forget.
 
 ## Steps
 
@@ -630,4 +630,4 @@ kubectl get nodes    # all should flip to Ready once Calico pods are Running
 - [01-inventory.md](01-inventory.md)
 
 ## Next
-- [07-ceph.md](07-ceph.md)
+- [06-ceph.md](06-ceph.md)

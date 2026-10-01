@@ -1,6 +1,6 @@
-# 06. Update Kubernetes
+# 11. Update Kubernetes
 
-**Goal:** Upgrade Kubernetes, Calico, and (external etcd only) the etcd packages, one held component at a time, from the versions deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Ceph's upgrade is [07-ceph.md](07-ceph.md).
+**Goal:** Upgrade Kubernetes, Calico, and (external etcd only) the etcd packages, one held component at a time, from the versions deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Do this after [09-smoke-test.md](09-smoke-test.md). Ceph's upgrade is the next file, [12-update-ceph.md](12-update-ceph.md).
 
 **Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `docker-ce` on the bastion, `prometheus-node-exporter`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
 
@@ -97,7 +97,7 @@ kubectl get tigerastatus -o yaml | grep -A2 "reason: Success"
 
 ## Steps — etcd cluster upgrade (external etcd only)
 
-Skip this section for stacked etcd — `kubeadm upgrade` already bumps etcd's static-pod image. External etcd is a plain apt package independent of Kubernetes' own version, so it needs its own upgrade, same "one node at a time, verify quorum" discipline as the Ceph mon upgrade in [07-ceph.md](07-ceph.md).
+Skip this section for stacked etcd — `kubeadm upgrade` already bumps etcd's static-pod image. External etcd is a plain apt package independent of Kubernetes' own version, so it needs its own upgrade, same "one node at a time, verify quorum" discipline as the Ceph mon upgrade in [12-update-ceph.md](12-update-ceph.md).
 
 **1. Pick a new pinned version** (on `k8s-etcd-1`):
 ```sh
@@ -127,7 +127,7 @@ Repeat on `k8s-etcd-2`, then `k8s-etcd-3`. A mixed-version quorum mid-rollout is
 - Certificate rotation
 
 ## Prerequisites
-- [05-deploy-kubernetes.md](05-deploy-kubernetes.md)
+- [09-smoke-test.md](09-smoke-test.md) — the stack from 05 through 09 is already up
 
 ## Next
-- [07-ceph.md](07-ceph.md)
+- [12-update-ceph.md](12-update-ceph.md)

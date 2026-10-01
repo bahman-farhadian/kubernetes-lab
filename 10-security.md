@@ -1,4 +1,4 @@
-# 11. Security hardening
+# 10. Security hardening
 
 **Goal:** Move the cluster from "working" to "defensible."
 
@@ -12,7 +12,7 @@
 - Confirm every held package from earlier steps (`apt-mark showhold` on each node, `k8s-etcd-*` included if present) still matches [00-overview.md](00-overview.md)'s package hold policy
 
 ## Prerequisites
-- [10-smoke-test.md](10-smoke-test.md)
+- [09-smoke-test.md](09-smoke-test.md)
 
 ## Next
-- [06-update-kubernetes.md](06-update-kubernetes.md)
+- [11-update-kubernetes.md](11-update-kubernetes.md)
