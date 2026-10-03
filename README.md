@@ -52,10 +52,11 @@ Two scenarios on one host, never at the same time (they reuse the same IP plan) 
 
 | Scenario | Host | Notes |
 |---|---|---|
-| **Stacked** | 12 threads, 31 GB RAM, ~888 GB NVMe | 11 VMs, 25 GB guest RAM. Deploy this first. |
-| **External etcd** | Same host, after stacked is gone | 13 VMs, 26 GB guest RAM. |
+| **Stacked** | 12 threads, 31 GB RAM, ~888 GB NVMe | 11 VMs, 22 GB guest RAM. Deploy this first. |
+| **Stacked + GPU** | Same host | 12 VMs, 24 GB. `k8s-work-4` is 2 GB. [14-gpu.md](14-gpu.md). |
+| **External etcd** | Same host, after the first cluster is gone | 13 VMs, 23 GB. With the GPU worker: 14 VMs, 25 GB. |
 
-Guest RAM must stay at or under 26 GB. The old 128 GB server plan does not fit. This host has no GPU, so [14-gpu.md](14-gpu.md) is not part of this run.
+Guest RAM stays at or under 26 GB in every row. The old ~128 GB GPU plan is not used.
 
 ## Rollout plan
 

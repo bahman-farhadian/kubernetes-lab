@@ -16,10 +16,11 @@ Named so a run and its docs/logs can be referred to unambiguously — always say
 
 | Profile | Host | Nodes |
 |---|---|---|
-| **Stacked** | This host | 2 firewalls, 2 API load balancers, 1 bastion, 3 control-plane, 3 workers. Deploy this first. Guest RAM 25 GB. |
-| **External etcd** | This host | Same, but 2 control-plane nodes and 3 etcd VMs. Guest RAM 26 GB. |
+| **Stacked** | This host | 2 firewalls, 2 API load balancers, 1 bastion, 3 control-plane, 3 workers. Deploy this first. Guest RAM 22 GB. |
+| **Stacked + GPU** | This host | Stacked plus `k8s-work-4` at 2 GB. Guest RAM 24 GB. |
+| **External etcd** | This host | 2 control-plane nodes and 3 etcd VMs. Guest RAM 23 GB, or 25 GB with the GPU worker. |
 
-Circle the matching table in [01-inventory.md](01-inventory.md), then walk [02-prepare.md](02-prepare.md) through [09-smoke-test.md](09-smoke-test.md) in number order. Inside [05-deploy-kubernetes.md](05-deploy-kubernetes.md), open one bootstrap (stacked or external). Upgrades come after that stack is up: [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). See [README.md](README.md#layout). **Deploy stacked first, then external etcd, one distro at a time.** The host is 12 logical CPUs and 31 GB RAM. Guest RAM stays at or under 26 GB. A 128 GB plan does not fit this machine, and there is no GPU to pass through. See [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [15-deployment-log.md](15-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
+Circle the matching table in [01-inventory.md](01-inventory.md), then walk [02-prepare.md](02-prepare.md) through [09-smoke-test.md](09-smoke-test.md) in number order. Inside [05-deploy-kubernetes.md](05-deploy-kubernetes.md), open one bootstrap (stacked or external). Upgrades come after that stack is up: [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). See [README.md](README.md#layout). **Deploy stacked first, then external etcd, one distro at a time.** The host is 12 logical CPUs and 31 GB RAM. Guest RAM stays at or under 26 GB, including stacked with the GPU worker (24 GB). The old ~128 GB GPU plan is not used. See [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [15-deployment-log.md](15-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
 
 ## Fixed decisions
 

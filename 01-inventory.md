@@ -10,7 +10,7 @@ The lab host has 12 logical CPUs, 31 GB RAM, and one ~888 GB NVMe. Plan as if th
 
 Only one cluster is on at a time. Debian 13 first, then Ubuntu 26. Stacked etcd is the first scenario. External etcd is the second, on the same host after the first cluster is gone.
 
-Guest RAM stays at or under **26 GB** in both scenarios, so about 5 GB remains for the host and for QEMU. Guest vCPU oversubscribes the 12 threads (18 stacked, 19 external). There is no GPU on this host, and no spare RAM for a fourth worker, so the GPU profile is not run here.
+Guest RAM stays at or under **26 GB** in every scenario, including stacked with the GPU worker. About 5 GB remains for the host and for QEMU. The old totals (about 128 GB) are not usable on this machine.
 
 Rollout: [README.md](README.md#rollout-plan).
 
@@ -117,15 +117,26 @@ Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN N
 | 06 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
 | 07 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
 | 08 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 2 GB | 30 GB | - |
-| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 4 GB | 20 GB | 40 GB |
-| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 4 GB | 20 GB | 40 GB |
-| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 4 GB | 20 GB | 40 GB |
-| | **VM TOTALS (11 VMs)** | | | **18** | **25 GB** | **250 GB** | **120 GB** |
+| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 3 GB | 20 GB | 40 GB |
+| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 3 GB | 20 GB | 40 GB |
+| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 3 GB | 20 GB | 40 GB |
+| | **VM TOTALS (11 VMs)** | | | **18** | **22 GB** | **250 GB** | **120 GB** |
 | | **HOST** | | | **12 threads** | **31 GB** | **~888 GB** | — |
 
-25 GB of guest RAM leaves about 6 GB for the host and QEMU. Control-plane nodes are at the kubeadm minimum (2 GB) because etcd is on the same VM. Workers stay at 4 GB so one Ceph OSD has room. The bastion is 3 GB: Nexus, Prometheus, and Grafana share it, and Nexus is the piece to watch. No HAProxy on the bastion. Its 40 GB disk is the Nexus blob store.
+22 GB of guest RAM leaves about 9 GB for the host and QEMU. Control-plane nodes are at the kubeadm minimum (2 GB) because etcd is on the same VM. Workers are 3 GB with one OSD. The bastion is 3 GB: Nexus, Prometheus, and Grafana share it. No HAProxy on the bastion. Its 40 GB disk is the Nexus blob store.
 
 Gateway VIP `10.0.1.254` and API VIP `10.0.1.10` are not VMs.
+
+### Stacked with GPU
+
+Same eleven VMs, plus one tainted worker. 2 GB is enough for the driver and one GPU pod, not for a heavy OSD. It still gets a 40 GB OSD so Ceph stays at 3+1.
+
+| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
+|---|---|---|---|---|---|---|---|
+| 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 1 | 2 GB | 20 GB | 40 GB |
+| | **VM TOTALS (12 VMs)** | | | **19** | **24 GB** | **270 GB** | **160 GB** |
+
+24 GB of guests leaves about 7 GB on the 31 GB host. Driver and device plugin: [14-gpu.md](14-gpu.md). The GPU has to already be visible inside the VM.
 
 ## Scenario B — External etcd
 
@@ -143,13 +154,13 @@ Control plane drops to 2 nodes. etcd moves to 3 VMs. Apiserver is stateless; onl
 | 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 1 GB | 10 GB | - |
 | 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 1 GB | 10 GB | - |
 | 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 1 GB | 10 GB | - |
-| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 4 GB | 20 GB | 40 GB |
-| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 4 GB | 20 GB | 40 GB |
-| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 4 GB | 20 GB | 40 GB |
-| | **VM TOTALS (13 VMs)** | | | **19** | **26 GB** | **250 GB** | **120 GB** |
+| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 3 GB | 20 GB | 40 GB |
+| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 3 GB | 20 GB | 40 GB |
+| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 3 GB | 20 GB | 40 GB |
+| | **VM TOTALS (13 VMs)** | | | **19** | **23 GB** | **250 GB** | **120 GB** |
 | | **HOST** | | | **12 threads** | **31 GB** | **~888 GB** | — |
 
-26 GB of guests leaves about 5 GB. That is the ceiling. etcd is 1 GB so this scenario still fits. Do not add `k8s-work-4`.
+23 GB of guests. etcd is 1 GB so this still fits. Adding `k8s-work-4` (1 vCPU, 2 GB, 20 GB root, 40 GB OSD) makes 14 VMs, 20 vCPU, **25 GB**, 290 GB root, 160 GB OSD. Still under the 26 GB cap.
 
 ## Prerequisites
 - [00-overview.md](00-overview.md)
