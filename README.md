@@ -48,15 +48,16 @@ Same palette as everywhere else — see the [color legend](00-overview.md#diagra
 
 ## Deployment profiles
 
-Two scenarios on one host, never at the same time (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). Pick the matching table in [01-inventory.md](01-inventory.md); the procedure files do not change.
+Four scenarios on the 128 GB server, never at the same time (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). Pick the matching table in [01-inventory.md](01-inventory.md); the procedure files do not change. The 32 GB machine is not a deploy target.
 
-| Scenario | Host | Notes |
+| Scenario | VMs | Guest RAM |
 |---|---|---|
-| **Stacked** | 12 threads, 31 GB RAM, ~888 GB NVMe | 11 VMs, 22 GB guest RAM. Deploy this first. |
-| **Stacked + GPU** | Same host | 12 VMs, 24 GB. `k8s-work-4` is 2 GB. [14-gpu.md](14-gpu.md). |
-| **External etcd** | Same host, after the first cluster is gone | 13 VMs, 23 GB. With the GPU worker: 14 VMs, 25 GB. |
+| **Stacked** | 11 | 106 GB. Deploy this first. |
+| **Stacked + GPU** | 12 | 122 GB. `k8s-work-4` is 16 GB. [14-gpu.md](14-gpu.md). |
+| **External etcd** | 13 | 104 GB. |
+| **External etcd + GPU** | 14 | 120 GB. |
 
-Guest RAM stays at or under 26 GB in every row. The old ~128 GB GPU plan is not used.
+Each row is under 128 GB. They are not added together.
 
 ## Rollout plan
 
