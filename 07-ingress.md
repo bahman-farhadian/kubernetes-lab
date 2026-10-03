@@ -22,7 +22,7 @@ kubectl get svc -n traefik   # note the NodePort for 80/443
 ```
 On **both** load-balancer nodes, add frontend/backend pairs for ports 80 and 443, backending to `<worker-ip>:<NodePort>` for each worker, then `sudo systemctl reload haproxy`. `ip_nonlocal_bind` from the API section already covers these binds.
 
-**3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` through the bastion.
+**3. Verify** with a throwaway `IngressRoute`/`Ingress` and `curl` to the load-balancer VIP (`http://10.0.1.10/`), not to the bastion.
 
 ## Prerequisites
 - [06-ceph.md](06-ceph.md)

@@ -18,9 +18,9 @@ LAN addresses here are **examples**. Use your own when you provision. Do not com
 
 ## Network
 
-- **Gateway:** `k8s-fw-1` / `k8s-fw-2`, keepalived, LAN VIP `10.0.1.254` (default gateway). VRID is per lab instance. [03-firewall.md](03-firewall.md).
-- **API:** `k8s-lb-1` / `k8s-lb-2`, keepalived + HAProxy, API VIP `10.0.1.10:6443`. Own VRID, different from the firewall's LAN VRID (same L2). [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
-- **Bastion** `10.0.1.11`: jump host, Nexus, Prometheus, Grafana, `kubectl`, Helm. No API VIP on this VM.
+- **Gateway:** `k8s-fw-1` / `k8s-fw-2`, keepalived only, LAN VIP `10.0.1.254`. Every node defaults through this address. No HAProxy here. [03-firewall.md](03-firewall.md).
+- **Load balancer:** `k8s-lb-1` / `k8s-lb-2`, keepalived + HAProxy, VIP `10.0.1.10`. Clients use it for the API (`:6443`) and, after ingress, for `:80`/`:443`. Own VRID, different from the firewall LAN VRID. Node-to-node traffic does not pass through this pair. [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
+- **Bastion** `10.0.1.11`: jump host, Nexus, Prometheus, Grafana, `kubectl`, Helm. One VM is normal for this role. No HAProxy and no VIP on it.
 - **DNS:** static `/etc/hosts` on every node ([02-prepare.md](02-prepare.md)). No cluster DNS server for node names.
 - **Kubernetes ranges** (must not overlap the LAN): pod CIDR `192.168.0.0/16`, service CIDR `10.96.0.0/12`.
 - **Ports:** `6443` (apiserver, via the API VIP), `80`/`443` (ingress, same VIP, added in [07-ingress.md](07-ingress.md)), `8081`/`8082` (Nexus), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on the bastion). VRRP is protocol 112, once for the firewall pair and once for the API pair.
@@ -29,10 +29,11 @@ LAN addresses here are **examples**. Use your own when you provision. Do not com
 ```mermaid
 flowchart LR
     Ext["Upstream / WAN"] --> WANVIP["WAN VIP"]:::bastion
-    WANVIP --> FW["k8s-fw-1 / k8s-fw-2"]:::bastion
-    FW --> LANVIP["LAN VIP\ngateway"]:::bastion
-    LANVIP --> LB["k8s-lb-1 / k8s-lb-2\nAPI VIP"]:::bastion
+    WANVIP --> FW["k8s-fw-1 / k8s-fw-2\ngateway only"]:::bastion
+    FW --> LAN["LAN"]:::worker
+    Client["kubectl / ingress"] --> LB["k8s-lb-1 / k8s-lb-2\nVIP :6443 :80 :443"]:::bastion
     LB --> CP["Control plane"]:::controlPlane
+    LAN --> CP
     CP -.-> Etcd["etcd"]:::etcd
     CP --> Work["Workers"]:::worker
     Work --> Storage["Ceph OSDs"]:::storage
@@ -44,7 +45,7 @@ flowchart LR
     classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
 ```
 
-The bastion sits on the LAN beside the API pair. It is not on the API path.
+The bastion is on the LAN and is not drawn: it is not on the gateway path or the API path.
 
 ## Laptop — Light profile
 

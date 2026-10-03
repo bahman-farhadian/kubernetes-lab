@@ -49,7 +49,7 @@ sudo apt-mark hold containerd
 
 ## API load balancer
 
-**Goal:** Two HAProxy nodes with keepalived, so the apiserver address survives one of them dying. This is the same VRRP pattern as the firewall pair, on its own VRID. The bastion does not own `10.0.1.10`.
+**Goal:** Two HAProxy nodes with keepalived, so the apiserver address survives one of them dying. Same VRRP pattern as the firewalls, own VRID. This pair is the only place HAProxy runs. The firewall stays a gateway. The bastion stays an admin VM. Neither owns `10.0.1.10`. Ingress later adds `:80` and `:443` on this same VIP.
 
 **Applies to:** `k8s-lb-1` and `k8s-lb-2` only. One LAN NIC each. No kubelet, no containerd, no Docker.
 

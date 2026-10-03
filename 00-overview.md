@@ -29,7 +29,7 @@ These are settled for the whole manual — later steps assume them rather than r
 | Area | Choice |
 |---|---|
 | OS | **Debian 13 ("Trixie") or Ubuntu 26 ("Resolute Raccoon")** on every VM of a given lab instance — do not mix distros inside one cluster. Work **one distro at a time** (Debian first, then Ubuntu). Apt commands are the same shape; where a repo URL or package name differs, the step says so. |
-| Edge | Two keepalived pairs, each with its own VRID. Firewalls `k8s-fw-1` / `k8s-fw-2`: WAN VIP + LAN VIP (default gateway). API proxies `k8s-lb-1` / `k8s-lb-2`: HAProxy on a floating API VIP. The bastion is not in either pair. WAN numbering is site-local and is **not** recorded in this repo. |
+| Edge | Three separate roles, same as an on-prem production cluster. Firewalls `k8s-fw-1` / `k8s-fw-2`: keepalived, WAN VIP + LAN gateway VIP. They do **not** run HAProxy. Load balancers `k8s-lb-1` / `k8s-lb-2`: keepalived + HAProxy, their own VRID, floating VIP for `:6443` and later `:80`/`:443`. Bastion: one admin VM (jump, kubectl, Helm, Nexus, Prometheus, Grafana). It is not in the request path and it does **not** run HAProxy. WAN numbering stays out of this repo. |
 | Bootstrap tool | `kubeadm` (not k3s/RKE2/Kubespray) |
 | Container runtime | **containerd** on every Kubernetes node. **Docker Engine** exists only on `k8s-bastion`, as a single-node daemon for the Compose support stack. Do not install Docker on ctrl/workers. |
 | CNI | Calico (NetworkPolicy support, needed in [10-security.md](10-security.md)) |
