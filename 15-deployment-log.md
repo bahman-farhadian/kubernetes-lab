@@ -7,9 +7,9 @@ All profiles and both etcd scenarios. Add one new row per deploy and per upgrade
 
 ## How to use this doc
 
-Copy the table below for each profile ([Light](README.md#rollout-plan) / Heavy / GPU) the first time you deploy it, then append a row every time you deploy or upgrade that profile.
+Copy the table below for each profile ([Heavy](README.md#rollout-plan) / GPU) the first time you deploy it, then append a row every time you deploy or upgrade that profile.
 
-### Profile: _(Light / Heavy / GPU)_ — Scenario _(A stacked / B external)_ — Distro _(Debian 13 / Ubuntu 26)_
+### Profile: _(Heavy / GPU)_ — Scenario _(A stacked / B external)_ — Distro _(Debian 13 / Ubuntu 26)_
 
 | Date | Event | KUBE version | Containerd | Calico | Ceph release/version | Ceph-CSI chart | Traefik chart | node_exporter / Prometheus / Grafana | NVIDIA driver / toolkit / plugin (GPU only) | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|

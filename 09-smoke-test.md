@@ -4,7 +4,7 @@
 
 Everything here goes in its own namespace so teardown is one command.
 
-Worker CPU/RAM in the example table below is the **Light** 4 vCPU / 4 GB size. On Heavy/GPU, recompute from `kubectl` allocatable on your actual nodes.
+The example numbers below are illustrative. Recompute from `kubectl` allocatable on your actual nodes.
 
 ## Steps
 
@@ -26,7 +26,7 @@ kubectl describe nodes k8s-work-1 k8s-work-2 k8s-work-3 | grep -A5 "Allocated re
 ```
 Write down: total allocatable CPU/memory across the workers, and what's already requested. The gap between "80% of allocatable" and "already requested" is what steps 4–5 need to add — work this out with your own numbers, not the ones below, which are illustrative only:
 
-| | Example (illustrative — Light, use your own numbers) |
+| | Example (illustrative — use your own numbers) |
 |---|---|
 | Allocatable, 3 workers combined | 12 vCPU / 12 GB (3 × 4 vCPU/4 GB, minus kubelet/system reserve) |
 | Already requested (Ceph + Calico) | ~1.5 vCPU / ~1.5 GB |

@@ -4,12 +4,13 @@
 
 > VM creation is out of scope ([00-overview.md](00-overview.md)). These tables are what the VMs look like once they exist.
 
-## Three independent lab environments
+## Two lab environments
 
-**Light**, **Heavy**, and **GPU** are separate clusters. They reuse `10.0.1.0/24`, so only one is on a given L2 at a time. Do not join a Light node to a Heavy or GPU cluster.
+**Heavy** and **GPU** are separate clusters on the server. They reuse `10.0.1.0/24`, so only one is on a given L2 at a time. Do not join a Heavy node to the GPU cluster.
 
-- **Light** (laptop) — 50% CPU cap, smaller nodes. Deploy this one first.
-- **Heavy** (server) — same shape, larger nodes.
+A 32 GB laptop cannot hold this layout. The API pair alone is two extra VMs, and stacked already wants 28 GB before the hypervisor. There is no laptop profile.
+
+- **Heavy** (server) — deploy this first.
 - **GPU** (server) — Heavy plus `k8s-work-4`.
 
 Rollout: [README.md](README.md#rollout-plan).
@@ -47,7 +48,7 @@ flowchart LR
 
 The bastion is on the LAN and is not drawn above: it is not on the gateway path or the API path.
 
-### VMs and connections — Light stacked
+### VMs and connections — stacked
 
 Eleven VMs. Addresses are the example LAN. External etcd drops `k8s-ctrl-3` and adds `k8s-etcd-1/2/3` (`.15`–`.17`). GPU adds `k8s-work-4` (`.24`).
 
@@ -105,63 +106,6 @@ flowchart TB
 
 Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, and metrics only — no line to the API VIP. After ingress, the same `.10` VIP also accepts TCP 80 and 443 and HAProxy sends those to the workers.
 
-## Laptop — Light profile
-
-Host budget: 50% CPU share. Adjust to the machine you actually have.
-
-The API pair is two small VMs (1 vCPU / 1 GB / 10 GB). On this laptop that drops host RAM reserve from 6 GB to 4 GB for stacked, and to none for external.
-
-### Scenario A — Stacked etcd
-
-| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
-|---|---|---|---|---|---|---|---|
-| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
-| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
-| 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
-| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
-| 06 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
-| 07 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
-| 08 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 2 GB | 30 GB | - |
-| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 4 GB | 20 GB | 40 GB |
-| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
-| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
-| | **VM TOTALS (11 VMs)** | | | **26** | **28 GB** | **250 GB** | **120 GB** |
-| | **HOST RESERVED** | | | **2** | **4 GB** | — | — |
-| | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
-
-Gateway VIP `10.0.1.254` and API VIP `10.0.1.10` are not VMs.
-
-- **RAM** still caps at 32 GB: 28 GB of VMs + 4 GB for the host.
-- **vCPU** oversubscribes (26 allocated on a 12-vCPU, 50%-capped share). RAM does not oversubscribe.
-- **Disk:** root 250 GB + Ceph OSD 120 GB = 370 GB of the 1 TB disk.
-- Bastion root is 40 GB for the Nexus blob store ([04-bastion.md](04-bastion.md)).
-
-### Scenario B — External etcd
-
-Control plane drops to 2 nodes. etcd moves to 3 VMs. Apiserver is stateless; only etcd needs an odd count ([00-overview.md](00-overview.md#scenarios)).
-
-| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
-|---|---|---|---|---|---|---|---|
-| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
-| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
-| 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
-| 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
-| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
-| 06 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
-| 07 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
-| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 2 GB | 20 GB | - |
-| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 2 GB | 20 GB | - |
-| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 2 GB | 20 GB | - |
-| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 4 GB | 20 GB | 40 GB |
-| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 4 GB | 20 GB | 40 GB |
-| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 4 GB | 20 GB | 40 GB |
-| | **VM TOTALS (13 VMs)** | | | **27** | **32 GB** | **280 GB** | **120 GB** |
-| | **HOST RESERVED** | | | **2** | **0 GB** | — | — |
-| | **PC TOTALS** | | | **12** | **32 GB** | **1 TB** | — |
-
-External Light fills the 32 GB laptop. No RAM left for the host. Run it only when nothing else is using that machine. Stacked is the laptop default.
-
 ## Server — Heavy and GPU
 
 Host budget as previously sized: 24 vCPU, 128 GB RAM, 250 GB NVMe for root disks, 1 TB NVMe for Ceph. The API pair adds 2 vCPU, 2 GB, and 20 GB of root on every server table. GPU stacked therefore wants 130 GB RAM and 270 GB of root NVMe; a chassis that is still 128 GB / 250 GB root is 2 GB of RAM and 20 GB of disk short. vCPU oversubscribe on GPU stacked goes from 2 to 4.
@@ -183,7 +127,7 @@ Host budget as previously sized: 24 vCPU, 128 GB RAM, 250 GB NVMe for root disks
 | 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
 | | **VM TOTALS (11 VMs)** | | | **26** | **106 GB** | **250 GB** | **600 GB** |
 
-Same bastion role as Light. Root disk 40 GB is the Nexus blob store.
+The bastion is jump, kubectl, Helm, Nexus, Prometheus, and Grafana. No HAProxy. Root disk 40 GB is the Nexus blob store.
 
 ### GPU — Scenario A (Heavy + GPU worker)
 
