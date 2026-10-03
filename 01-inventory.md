@@ -45,7 +45,65 @@ flowchart LR
     classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
 ```
 
-The bastion is on the LAN and is not drawn: it is not on the gateway path or the API path.
+The bastion is on the LAN and is not drawn above: it is not on the gateway path or the API path.
+
+### VMs and connections — Light stacked
+
+Eleven VMs. Addresses are the example LAN. External etcd drops `k8s-ctrl-3` and adds `k8s-etcd-1/2/3` (`.15`–`.17`). GPU adds `k8s-work-4` (`.24`).
+
+```mermaid
+flowchart TB
+    WAN["Upstream WAN"]
+
+    FW1["k8s-fw-1\nLAN .1 + WAN NIC"]:::bastion
+    FW2["k8s-fw-2\nLAN .2 + WAN NIC"]:::bastion
+    GW[".254 gateway VIP\nnot a VM"]:::bastion
+
+    LB1["k8s-lb-1\n.8"]:::bastion
+    LB2["k8s-lb-2\n.9"]:::bastion
+    API[".10 load-balancer VIP\nnot a VM"]:::bastion
+
+    BAST["k8s-bastion\n.11 admin"]:::bastion
+
+    C1["k8s-ctrl-1\n.12 CP + etcd"]:::controlPlane
+    C2["k8s-ctrl-2\n.13 CP + etcd"]:::controlPlane
+    C3["k8s-ctrl-3\n.14 CP + etcd"]:::controlPlane
+
+    W1["k8s-work-1\n.21 worker + OSD"]:::worker
+    W2["k8s-work-2\n.22 worker + OSD"]:::worker
+    W3["k8s-work-3\n.23 worker + OSD"]:::worker
+
+    WAN --- FW1
+    WAN --- FW2
+    FW1 <-->|"VRRP"| FW2
+    FW1 --- GW
+    FW2 --- GW
+    GW -.->|"default route"| BAST
+
+    LB1 <-->|"VRRP"| LB2
+    LB1 --- API
+    LB2 --- API
+    API -->|"TCP 6443"| C1
+    API -->|"TCP 6443"| C2
+    API -->|"TCP 6443"| C3
+
+    C1 <-->|"etcd"| C2
+    C2 <-->|"etcd"| C3
+    C3 <-->|"etcd"| C1
+    C1 -->|"kubelet"| W1
+    C1 -->|"kubelet"| W2
+    C1 -->|"kubelet"| W3
+    W1 <-->|"Calico / Ceph"| W2
+    W2 <-->|"Calico / Ceph"| W3
+
+    classDef bastion fill:#1f6feb,stroke:#0c2d6b,color:#ffffff
+    classDef controlPlane fill:#8250df,stroke:#4b1f91,color:#ffffff
+    classDef etcd fill:#d29922,stroke:#7d5c05,color:#1a1a1a
+    classDef worker fill:#2da44e,stroke:#164c24,color:#ffffff
+    classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
+```
+
+Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, and metrics only — no line to the API VIP. After ingress, the same `.10` VIP also accepts TCP 80 and 443 and HAProxy sends those to the workers.
 
 ## Laptop — Light profile
 
