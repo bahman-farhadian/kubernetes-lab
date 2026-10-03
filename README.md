@@ -48,19 +48,19 @@ Same palette as everywhere else — see the [color legend](00-overview.md#diagra
 
 ## Deployment profiles
 
-Two independent instances of this lab, never joined together (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). Pick the matching table in [01-inventory.md](01-inventory.md); the procedure files do not change.
+Two scenarios on one host, never at the same time (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). Pick the matching table in [01-inventory.md](01-inventory.md); the procedure files do not change.
 
-| Profile | Host | Notes |
+| Scenario | Host | Notes |
 |---|---|---|
-| **Heavy** | Server | Two firewalls, two API proxies, one bastion, 3 control-plane, 3 workers. Deploy this first. |
-| **GPU** | Server | Heavy + one GPU worker (`k8s-work-4`), passed-through NVIDIA, tainted. |
+| **Stacked** | 12 threads, 31 GB RAM, ~888 GB NVMe | 11 VMs, 25 GB guest RAM. Deploy this first. |
+| **External etcd** | Same host, after stacked is gone | 13 VMs, 26 GB guest RAM. |
 
-There is no laptop profile. This layout does not fit in 32 GB of RAM.
+Guest RAM must stay at or under 26 GB. The old 128 GB server plan does not fit. This host has no GPU, so [14-gpu.md](14-gpu.md) is not part of this run.
 
 ## Rollout plan
 
-1. **Heavy (server) — current task.** On **Debian 13 first**, walk 02 → 09, then [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). Ubuntu 26 is the same path later, not at the same time. One etcd scenario per pass (stacked section of [05-deploy-kubernetes.md](05-deploy-kubernetes.md), later the external section).
-2. **GPU (server)** — Heavy plus `k8s-work-4` (joined in 05, OSD in 06) and [14-gpu.md](14-gpu.md).
+1. **Stacked — current task.** On **Debian 13 first**, walk 02 → 09, then [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). Ubuntu 26 is the same path later, not at the same time.
+2. **External etcd** — same spine, the other bootstrap section in [05-deploy-kubernetes.md](05-deploy-kubernetes.md), after the stacked cluster has been removed.
 
 Record the exact pinned component versions used on each run in [15-deployment-log.md](15-deployment-log.md).
 

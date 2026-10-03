@@ -16,10 +16,10 @@ Named so a run and its docs/logs can be referred to unambiguously — always say
 
 | Profile | Host | Nodes |
 |---|---|---|
-| **Heavy** | Server | 2 firewalls, 2 API load balancers, bastion (jump + kubectl/Helm + Nexus + Prometheus/Grafana), 3 control-plane, 3 workers. Deploy this first. |
-| **GPU** | Server | Heavy + `k8s-work-4` (NVIDIA, passed-through, tainted) |
+| **Stacked** | This host | 2 firewalls, 2 API load balancers, 1 bastion, 3 control-plane, 3 workers. Deploy this first. Guest RAM 25 GB. |
+| **External etcd** | This host | Same, but 2 control-plane nodes and 3 etcd VMs. Guest RAM 26 GB. |
 
-Circle the matching table in [01-inventory.md](01-inventory.md), then walk [02-prepare.md](02-prepare.md) through [09-smoke-test.md](09-smoke-test.md) in number order. Inside [05-deploy-kubernetes.md](05-deploy-kubernetes.md), open one bootstrap (stacked or external). Upgrades come after that stack is up: [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). GPU adds [14-gpu.md](14-gpu.md). See [README.md](README.md#layout). **Deploy Heavy first (both scenarios), then GPU.** A 32 GB laptop is not a target. See [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [15-deployment-log.md](15-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
+Circle the matching table in [01-inventory.md](01-inventory.md), then walk [02-prepare.md](02-prepare.md) through [09-smoke-test.md](09-smoke-test.md) in number order. Inside [05-deploy-kubernetes.md](05-deploy-kubernetes.md), open one bootstrap (stacked or external). Upgrades come after that stack is up: [11-update-kubernetes.md](11-update-kubernetes.md), then [12-update-ceph.md](12-update-ceph.md). See [README.md](README.md#layout). **Deploy stacked first, then external etcd, one distro at a time.** The host is 12 logical CPUs and 31 GB RAM. Guest RAM stays at or under 26 GB. A 128 GB plan does not fit this machine, and there is no GPU to pass through. See [README.md](README.md#rollout-plan). Record the exact pinned versions used for each profile's run in [15-deployment-log.md](15-deployment-log.md) — the steps use version *variables* (`KUBE_DEPLOY_VERSION`, `CEPH_DEPLOY_VERSION`, …), and which concrete value you picked for a given profile/run is exactly the kind of thing that's easy to lose track of otherwise.
 
 ## Fixed decisions
 

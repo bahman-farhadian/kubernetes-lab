@@ -4,14 +4,13 @@
 
 > VM creation is out of scope ([00-overview.md](00-overview.md)). These tables are what the VMs look like once they exist.
 
-## Two lab environments
+## One host, two scenarios
 
-**Heavy** and **GPU** are separate clusters on the server. They reuse `10.0.1.0/24`, so only one is on a given L2 at a time. Do not join a Heavy node to the GPU cluster.
+The lab host has 12 logical CPUs, 31 GB RAM, and one ~888 GB NVMe. Plan as if that disk is free for the cluster. Do not use the external drive.
 
-A 32 GB laptop cannot hold this layout. The API pair alone is two extra VMs, and stacked already wants 28 GB before the hypervisor. There is no laptop profile.
+Only one cluster is on at a time. Debian 13 first, then Ubuntu 26. Stacked etcd is the first scenario. External etcd is the second, on the same host after the first cluster is gone.
 
-- **Heavy** (server) — deploy this first.
-- **GPU** (server) — Heavy plus `k8s-work-4`.
+Guest RAM stays at or under **26 GB** in both scenarios, so about 5 GB remains for the host and for QEMU. Guest vCPU oversubscribes the 12 threads (18 stacked, 19 external). There is no GPU on this host, and no spare RAM for a fourth worker, so the GPU profile is not run here.
 
 Rollout: [README.md](README.md#rollout-plan).
 
@@ -106,65 +105,51 @@ flowchart TB
 
 Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, and metrics only — no line to the API VIP. After ingress, the same `.10` VIP also accepts TCP 80 and 443 and HAProxy sends those to the workers.
 
-## Server — Heavy and GPU
-
-Host budget as previously sized: 24 vCPU, 128 GB RAM, 250 GB NVMe for root disks, 1 TB NVMe for Ceph. The API pair adds 2 vCPU, 2 GB, and 20 GB of root on every server table. GPU stacked therefore wants 130 GB RAM and 270 GB of root NVMe; a chassis that is still 128 GB / 250 GB root is 2 GB of RAM and 20 GB of disk short. vCPU oversubscribe on GPU stacked goes from 2 to 4.
-
-### Heavy — Scenario A (Stacked etcd)
+## Scenario A — Stacked etcd
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
-| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
-| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
+| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 1 | 1 GB | 20 GB | - |
+| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 1 | 1 GB | 20 GB | - |
 | 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
 | 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
-| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
-| 06 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 8 GB | 30 GB | - |
-| 07 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 8 GB | 30 GB | - |
-| 08 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 8 GB | 30 GB | - |
-| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
-| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
-| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (11 VMs)** | | | **26** | **106 GB** | **250 GB** | **600 GB** |
+| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 3 GB | 40 GB | - |
+| 06 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
+| 07 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
+| 08 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 2 | 2 GB | 30 GB | - |
+| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 4 GB | 20 GB | 40 GB |
+| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 4 GB | 20 GB | 40 GB |
+| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 4 GB | 20 GB | 40 GB |
+| | **VM TOTALS (11 VMs)** | | | **18** | **25 GB** | **250 GB** | **120 GB** |
+| | **HOST** | | | **12 threads** | **31 GB** | **~888 GB** | — |
 
-The bastion is jump, kubectl, Helm, Nexus, Prometheus, and Grafana. No HAProxy. Root disk 40 GB is the Nexus blob store.
+25 GB of guest RAM leaves about 6 GB for the host and QEMU. Control-plane nodes are at the kubeadm minimum (2 GB) because etcd is on the same VM. Workers stay at 4 GB so one Ceph OSD has room. The bastion is 3 GB: Nexus, Prometheus, and Grafana share it, and Nexus is the piece to watch. No HAProxy on the bastion. Its 40 GB disk is the Nexus blob store.
 
-### GPU — Scenario A (Heavy + GPU worker)
+Gateway VIP `10.0.1.254` and API VIP `10.0.1.10` are not VMs.
 
-Everything in Heavy above, plus:
+## Scenario B — External etcd
 
-| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
-|---|---|---|---|---|---|---|---|
-| 12 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (12 VMs)** | | | **28** | **130 GB** | **270 GB** | **800 GB** |
-| | **PC AS PREVIOUSLY STATED** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
-
-`k8s-work-4` is a VM with the GPU passed through. Hypervisor IOMMU setup is out of scope. The node is tainted. Driver and device plugin: [14-gpu.md](14-gpu.md).
-
-### Heavy/GPU — Scenario B (External etcd)
+Control plane drops to 2 nodes. etcd moves to 3 VMs. Apiserver is stateless; only etcd needs an odd count ([00-overview.md](00-overview.md#scenarios)).
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
-| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
-| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
+| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 1 | 1 GB | 20 GB | - |
+| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 1 | 1 GB | 20 GB | - |
 | 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
 | 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
-| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
-| 06 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 8 GB | 30 GB | - |
-| 07 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 8 GB | 30 GB | - |
-| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 2 GB | 10 GB | - |
-| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 2 GB | 10 GB | - |
-| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 2 GB | 10 GB | - |
-| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
-| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
-| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
-| 14 | k8s-work-4 | Worker / Storage / GPU (NVIDIA) | 10.0.1.24 | 2 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (14 VMs)** | | | **29** | **128 GB** | **270 GB** | **800 GB** |
-| | **PC AS PREVIOUSLY STATED** | | | **24** | **128 GB** | **250 GB** | **1 TB** |
+| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 3 GB | 40 GB | - |
+| 06 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 2 GB | 30 GB | - |
+| 07 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 2 GB | 30 GB | - |
+| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 1 GB | 10 GB | - |
+| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 1 GB | 10 GB | - |
+| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 1 GB | 10 GB | - |
+| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 2 | 4 GB | 20 GB | 40 GB |
+| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 2 | 4 GB | 20 GB | 40 GB |
+| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 2 | 4 GB | 20 GB | 40 GB |
+| | **VM TOTALS (13 VMs)** | | | **19** | **26 GB** | **250 GB** | **120 GB** |
+| | **HOST** | | | **12 threads** | **31 GB** | **~888 GB** | — |
 
-RAM matches 128 GB with nothing reserved. Root disks need 270 GB, 20 GB past the 250 GB NVMe. Drop `k8s-work-4` for a Heavy-only external cluster (27 vCPU / 104 GB / 250 GB root / 600 GB OSD).
-
-etcd nodes stay 1 vCPU / 2 GB / 10 GB: at this size etcd is disk and network sensitive, not CPU hungry.
+26 GB of guests leaves about 5 GB. That is the ceiling. etcd is 1 GB so this scenario still fits. Do not add `k8s-work-4`.
 
 ## Prerequisites
 - [00-overview.md](00-overview.md)
