@@ -1,6 +1,6 @@
 # 06. Ceph
 
-**Goal:** Bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver.
+**Goal:** After [05-deploy-kubernetes.md](05-deploy-kubernetes.md) — nodes `Ready`, Calico up — bootstrap Ceph as native `apt` packages/systemd services on the worker nodes (no Rook operator pods — see [00-overview.md](00-overview.md)), then let Kubernetes consume it via the lean Ceph-CSI driver. Do not install Ceph before the cluster exists: the CSI pods have nowhere to run until then.
 
 Mon + mgr + OSD are co-located on `k8s-work-1/2/3` — 3 mons for quorum, one OSD per node using the dedicated Ceph disk from [01-inventory.md](01-inventory.md). This is unrelated to the etcd tier (`k8s-etcd-*` in the external scenario) — Ceph's own mon/quorum is entirely separate from Kubernetes' etcd.
 
