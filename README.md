@@ -57,7 +57,7 @@ Four scenarios on the 128 GB server, never at the same time (they reuse the same
 | **External etcd** | 13 | 110 GB. Three 4 GB etcd nodes, so this costs more RAM than stacked. |
 | **External etcd + GPU** | 14 | 126 GB. |
 
-Each row is under 128 GB. They are not added together.
+Each row is under 128 GB. They are not added together. vCPU, disk, and the per-VM sizes are in [01-inventory.md](01-inventory.md#vm-resources).
 
 ## Rollout plan
 

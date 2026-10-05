@@ -103,6 +103,30 @@ flowchart TB
 
 Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, and metrics only — no line to the API VIP. After ingress, the same `.10` VIP also accepts TCP 80 and 443 and HAProxy sends those to the workers.
 
+## VM resources
+
+One row per VM type. The scenario tables below repeat these sizes with names and example addresses.
+
+| VM | vCPU | RAM | Root | Ceph OSD | Where it appears |
+|---|---|---|---|---|---|
+| k8s-fw-1, k8s-fw-2 | 2 | 2 GB | 20 GB | — | All four scenarios |
+| k8s-lb-1, k8s-lb-2 | 1 | 1 GB | 10 GB | — | All four scenarios |
+| k8s-bastion | 2 | 4 GB | 40 GB | — | All four scenarios |
+| k8s-ctrl (stacked, etcd on the node) | 2 | 8 GB | 30 GB | — | Scenarios 1 and 2, three nodes |
+| k8s-ctrl (external, no etcd) | 2 | 8 GB | 30 GB | — | Scenarios 3 and 4, two nodes |
+| k8s-etcd | 1 | 4 GB | 20 GB | — | Scenarios 3 and 4, three nodes |
+| k8s-work-1/2/3 | 4 | 24 GB | 20 GB | 200 GB | All four scenarios |
+| k8s-work-4 (GPU) | 2 | 16 GB | 20 GB | 200 GB | Scenarios 2 and 4 only |
+
+Scenario totals. Only one row is powered on at a time. Host RAM left is 128 GB minus the guest total.
+
+| Scenario | VMs | vCPU | Guest RAM | Root | Ceph OSD | Host RAM left |
+|---|---|---|---|---|---|---|
+| 1. Stacked | 11 | 26 | 106 GB | 250 GB | 600 GB | 22 GB |
+| 2. Stacked + GPU | 12 | 28 | 122 GB | 270 GB | 800 GB | 6 GB |
+| 3. External etcd | 13 | 27 | 110 GB | 280 GB | 600 GB | 18 GB |
+| 4. External etcd + GPU | 14 | 29 | 126 GB | 300 GB | 800 GB | 2 GB |
+
 ## 1. Stacked etcd
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
