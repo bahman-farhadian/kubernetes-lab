@@ -133,21 +133,21 @@ One row per VM type. The scenario tables below repeat these sizes with names and
 |---|---|---|---|---|---|
 | k8s-fw-1, k8s-fw-2 | 2 | 2 GB | 20 GB | — | All four scenarios |
 | k8s-lb-1, k8s-lb-2 | 1 | 1 GB | 10 GB | — | All four scenarios |
-| k8s-bastion | 2 | 4 GB | 40 GB | — | All four scenarios |
+| k8s-bastion | 2 or 4 | 4 GB | 40 GB | — | 4 vCPU only in scenario 1 |
 | k8s-ctrl (stacked, etcd on the node) | 4 | 8 GB | 30 GB | — | Scenarios 1 and 2, three nodes |
 | k8s-ctrl (external, no etcd) | 4 | 8 GB | 30 GB | — | Scenarios 3 and 4, two nodes |
 | k8s-etcd | 2 | 4 GB | 20 GB | — | Scenarios 3 and 4, three nodes |
-| k8s-work-1/2/3 | 6 | 24 GB | 20 GB | 200 GB | All four scenarios |
-| k8s-work-4 (GPU) | 4 | 16 GB | 20 GB | — | Scenarios 2 and 4 only. Not a Ceph node. |
+| k8s-work-1/2/3 | 6 | 24–28 GB | 20 GB | 200 GB | RAM changes per scenario so the host stays at 90–95% |
+| k8s-work-4 (GPU) | 2 or 4 | 12 GB | 20 GB | — | Scenarios 2 and 4. Not a Ceph node. |
 
-Scenario totals. Only one row is powered on at a time. RAM left is 128 GB minus the guest total.
+Scenario totals. Only one row is powered on at a time. The ceiling is 95% of the host: **42 vCPUs** (95% of 44) and **122 GB** (95% of 128 GB). 90% is 40 vCPUs and 115 GB. Each scenario below sits in that band. The full VM list for each one follows.
 
-| Scenario | VMs | vCPU | Guest RAM | Root | Ceph OSD | Of 128 GB |
-|---|---|---|---|---|---|---|
-| 1. Stacked | 11 | 38 | 106 GB | 250 GB | 600 GB | 22 GB left |
-| 2. Stacked + GPU | 12 | 42 | 122 GB | 270 GB | 600 GB | 6 GB left |
-| 3. External etcd | 13 | 40 | 110 GB | 280 GB | 600 GB | 18 GB left |
-| 4. External etcd + GPU | 14 | 44 | 126 GB | 300 GB | 600 GB | 2 GB left |
+| Scenario | VMs | vCPU | Guest RAM | Of 44 vCPUs | Of 128 GB | Root | Ceph OSD |
+|---|---|---|---|---|---|---|---|
+| 1. Stacked | 11 | 40 | 118 GB | 91% | 92% | 250 GB | 600 GB |
+| 2. Stacked + GPU | 12 | 42 | 118 GB | 95% | 92% | 270 GB | 600 GB |
+| 3. External etcd | 13 | 40 | 122 GB | 91% | 95% | 280 GB | 600 GB |
+| 4. External etcd + GPU | 14 | 42 | 122 GB | 95% | 95% | 300 GB | 600 GB |
 
 ## Where each scenario lands
 
@@ -155,14 +155,35 @@ VM root disks are image files on the two 192G volumes together (`/data-root` and
 
 | Scenario | vCPU of 44 | RAM of 128 GB | Root disks on 384G | Ceph disks on 888G |
 |---|---|---|---|---|
-| 1. Stacked | 38 | 106 GB, 22 GB left | 250 GB, fits | 600 GB, fits |
-| 2. Stacked + GPU | 42 | 122 GB, 6 GB left | 270 GB, fits | 600 GB, fits |
-| 3. External etcd | 40 | 110 GB, 18 GB left | 280 GB, fits | 600 GB, fits |
-| 4. External etcd + GPU | 44 | 126 GB, 2 GB left | 300 GB, fits | 600 GB, fits |
+| 1. Stacked | 40, 91% | 118 GB, 10 GB left | 250 GB, fits | 600 GB, fits |
+| 2. Stacked + GPU | 42, 95% | 118 GB, 10 GB left | 270 GB, fits | 600 GB, fits |
+| 3. External etcd | 40, 91% | 122 GB, 6 GB left | 280 GB, fits | 600 GB, fits |
+| 4. External etcd + GPU | 42, 95% | 122 GB, 6 GB left | 300 GB, fits | 600 GB, fits |
 
-All four rows are at or under 44 vCPUs. The 50% share is set on the VM by the person who creates it. Scenario 4 leaves 2 GB, which is the tight RAM row. The three Ceph images share the 888G SSD on purpose. Putting root disks and Ceph disks on that same SSD together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why the root disks stay on the two 192G volumes.
+The 50% share is set on the VM by the person who creates it. Scenario 4 used to be 44 vCPUs and 126 GB, which is the whole CPU cap and 98% of the RAM. The GPU VM there is now 2 vCPUs and 12 GB, and the workers are 24 GB instead of 28 GB, so that row stays inside 95%. The three Ceph images share the 888G SSD on purpose. Putting root disks and Ceph disks on that same SSD together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why the root disks stay on the two 192G volumes.
 
 ## 1. Stacked etcd
+
+| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
+|---|---|---|---|---|---|---|---|
+| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
+| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
+| 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
+| 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
+| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 4 | 4 GB | 40 GB | - |
+| 06 | k8s-ctrl-1 | Control Plane + etcd | 10.0.1.12 | 4 | 8 GB | 30 GB | - |
+| 07 | k8s-ctrl-2 | Control Plane + etcd | 10.0.1.13 | 4 | 8 GB | 30 GB | - |
+| 08 | k8s-ctrl-3 | Control Plane + etcd | 10.0.1.14 | 4 | 8 GB | 30 GB | - |
+| 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 28 GB | 20 GB | 200 GB |
+| 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 28 GB | 20 GB | 200 GB |
+| 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 28 GB | 20 GB | 200 GB |
+| | **VM TOTALS (11 VMs)** | | | **40** | **118 GB** | **250 GB** | **600 GB** |
+
+40 vCPUs is 91% of 44. 118 GB is 92% of 128 GB, so 10 GB stays with the host. No HAProxy on the bastion. Its 40 GB disk is the Nexus blob store. Gateway VIP `10.0.1.254` and API VIP `10.0.1.10` are not VMs.
+
+## 2. Stacked etcd + GPU
+
+Workers are 24 GB here, not 28 GB, so the GPU VM fits inside 95% of the host. `k8s-work-4` has no Ceph disk.
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
@@ -177,20 +198,10 @@ All four rows are at or under 44 vCPUs. The 50% share is set on the VM by the pe
 | 09 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 24 GB | 20 GB | 200 GB |
 | 10 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 24 GB | 20 GB | 200 GB |
 | 11 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (11 VMs)** | | | **38** | **106 GB** | **250 GB** | **600 GB** |
+| 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 4 | 12 GB | 20 GB | — |
+| | **VM TOTALS (12 VMs)** | | | **42** | **118 GB** | **270 GB** | **600 GB** |
 
-106 GB leaves 22 GB of the 128 GB for the host. No HAProxy on the bastion. Its 40 GB disk is the Nexus blob store. Gateway VIP `10.0.1.254` and API VIP `10.0.1.10` are not VMs.
-
-## 2. Stacked etcd + GPU
-
-Same eleven VMs. `k8s-work-4` is 16 GB and has no Ceph disk. At 24 GB this scenario was 130 GB and did not fit.
-
-| # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
-|---|---|---|---|---|---|---|---|
-| 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 4 | 16 GB | 20 GB | — |
-| | **VM TOTALS (12 VMs)** | | | **42** | **122 GB** | **270 GB** | **600 GB** |
-
-122 GB leaves 6 GB of the 128 GB for the host. Driver and device plugin: [14-gpu.md](14-gpu.md).
+42 vCPUs is 95% of 44. 118 GB is 92% of 128 GB. Driver and device plugin: [14-gpu.md](14-gpu.md).
 
 ## 3. External etcd
 
@@ -208,23 +219,36 @@ Control plane drops to 2 nodes. etcd moves to 3 smaller VMs. Apiserver is statel
 | 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 2 | 4 GB | 20 GB | - |
 | 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 2 | 4 GB | 20 GB | - |
 | 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 2 | 4 GB | 20 GB | - |
-| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 24 GB | 20 GB | 200 GB |
-| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 24 GB | 20 GB | 200 GB |
-| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (13 VMs)** | | | **40** | **110 GB** | **280 GB** | **600 GB** |
+| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 28 GB | 20 GB | 200 GB |
+| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 28 GB | 20 GB | 200 GB |
+| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 28 GB | 20 GB | 200 GB |
+| | **VM TOTALS (13 VMs)** | | | **40** | **122 GB** | **280 GB** | **600 GB** |
 
-110 GB leaves 18 GB of the 128 GB for the host. The etcd tier is 3 × 4 GB. That is more RAM than the etcd slice inside the three stacked control planes, which is why this scenario costs more than stacked even though two apiservers replace three.
+40 vCPUs is 91% of 44. 122 GB is 95% of 128 GB. The etcd tier is 2 × 8 GB plus 3 × 4 GB = 28 GB, against 24 GB for the three stacked control planes. More machines, more RAM, and still inside the ceiling.
 
 ## 4. External etcd + GPU
 
-Same as scenario 3, plus the same 16 GB GPU worker. It does not join Ceph.
+This was 44 vCPUs and 126 GB: the whole CPU cap, and 98% of the RAM. Workers are 24 GB instead of 28 GB, and the GPU VM is 2 vCPUs and 12 GB. It does not join Ceph.
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
-| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 4 | 16 GB | 20 GB | — |
-| | **VM TOTALS (14 VMs)** | | | **44** | **126 GB** | **300 GB** | **600 GB** |
+| 01 | k8s-fw-1 | Firewall (WAN + LAN) | 10.0.1.1 | 2 | 2 GB | 20 GB | - |
+| 02 | k8s-fw-2 | Firewall (WAN + LAN) | 10.0.1.2 | 2 | 2 GB | 20 GB | - |
+| 03 | k8s-lb-1 | API HAProxy (VRRP master) | 10.0.1.8 | 1 | 1 GB | 10 GB | - |
+| 04 | k8s-lb-2 | API HAProxy (VRRP backup) | 10.0.1.9 | 1 | 1 GB | 10 GB | - |
+| 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
+| 06 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 4 | 8 GB | 30 GB | - |
+| 07 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 4 | 8 GB | 30 GB | - |
+| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 2 | 4 GB | 20 GB | - |
+| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 2 | 4 GB | 20 GB | - |
+| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 2 | 4 GB | 20 GB | - |
+| 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 24 GB | 20 GB | 200 GB |
+| 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 24 GB | 20 GB | 200 GB |
+| 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 24 GB | 20 GB | 200 GB |
+| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 12 GB | 20 GB | — |
+| | **VM TOTALS (14 VMs)** | | | **42** | **122 GB** | **300 GB** | **600 GB** |
 
-126 GB leaves 2 GB of the 128 GB for the host. That is the tight row. Do not raise the GPU worker back to 24 GB.
+42 vCPUs is 95% of 44. 122 GB is 95% of 128 GB, so 6 GB stays with the host. Do not put the 16 GB GPU size back. That returns this row to 126 GB.
 
 ## Prerequisites
 - [00-overview.md](00-overview.md)
