@@ -19,15 +19,16 @@ One KVM server runs every VM. This is a lab, so that is the whole physical layer
 | Servers | 1 |
 | vCPU | 24 |
 | RAM | 128 GB |
-| Root disk | 250 GB |
-| OSD disk | 1 TB |
+| Disk | 250 GB |
 | Clusters powered on | 1 |
 
 A single host cannot provide redundancy or failover. There is no second server to take over. If this machine loses power, crashes, or its disk fails, every VM stops and the cluster is down. Keepalived does not help in that case, because both members of a pair are on the same host.
 
 The host can still provide fault tolerance for a VM, while the host itself stays up. One firewall VM can die and the other keeps the gateway. One API proxy can die and the other keeps `10.0.1.10`. One control plane or one etcd member can die and the cluster still has quorum. One storage worker can die and Ceph still has two OSDs and two monitors. That is tolerance of a guest failure, not failover of the server.
 
-Guest vCPU peaks at 29 against these 24 CPUs, so the largest scenario oversubscribes the CPU. Guest RAM peaks at 126 GB of the 128 GB, which leaves 2 GB for KVM itself. The root disk is 250 GB. Only scenario 1 uses 250 GB of VM root disks and fits on it. Scenario 2 needs 270 GB, scenario 3 needs 280 GB, and scenario 4 needs 300 GB. Those three do not fit on this root disk. Ceph's 600 GB of OSD disks does fit on the 1 TB OSD disk. The GPU VM adds no OSD.
+Guest vCPU peaks at 29 against these 24 CPUs, so the largest scenario oversubscribes the CPU. Guest RAM peaks at 126 GB of the 128 GB, which leaves 2 GB for KVM itself. This host has no OSD disk. The 200 GB Ceph disks belong to `k8s-work-1`, `k8s-work-2`, and `k8s-work-3`. They are in the VM resource table, not on the server. The GPU VM has none.
+
+The server's only disk is 250 GB. Scenario 1's VM root disks are 250 GB and fill it. Scenario 2 needs 270 GB of VM root disks, scenario 3 needs 280 GB, and scenario 4 needs 300 GB. Those three do not fit on this disk. The 600 GB of Ceph disks are extra disks on the workers. They are not free space on the KVM host.
 
 Rollout: [README.md](README.md#rollout-plan).
 
