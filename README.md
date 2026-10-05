@@ -48,7 +48,7 @@ Same palette as everywhere else — see the [color legend](00-overview.md#diagra
 
 ## Deployment profiles
 
-Four scenarios on one KVM host (24 threads, 125 GiB usable RAM, three SSDs), never at the same time (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). The host itself is not redundant: [01-inventory.md](01-inventory.md#kvm-host). Pick the matching VM table in that file. The 32 GB machine is not a deploy target.
+Four scenarios on one KVM host (24 threads, 128 GB RAM, three SSDs), never at the same time (they reuse the same IP plan) — see [00-overview.md](00-overview.md#deployment-profiles). The host itself is not redundant: [01-inventory.md](01-inventory.md#kvm-host). Pick the matching VM table in that file. The 32 GB machine is not a deploy target.
 
 | Scenario | VMs | Guest RAM |
 |---|---|---|
