@@ -28,8 +28,10 @@ If that version is too old for the Kubernetes minor below, use Docker's `contain
 ```sh
 sudo mkdir -p /etc/containerd
 containerd config default | sudo tee /etc/containerd/config.toml      # package default can disable CRI
+grep -n SystemdCgroup /etc/containerd/config.toml                     # read it before changing it
 sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-sudo systemctl enable --now containerd                                # start now and on boot
+grep -n SystemdCgroup /etc/containerd/config.toml                     # the file is what survives reboot
+sudo systemctl enable --now containerd                                # start from that file
 sudo ctr version                                                       # client can talk to the daemon
 ls -l /run/containerd/containerd.sock                                  # kubeadm uses this socket
 ```
@@ -49,11 +51,12 @@ API_VRID=61              # must differ from the firewall LAN VRID; same L2, or t
 
 `k8s-lb-1` is MASTER (priority 100). `k8s-lb-2` is BACKUP (priority 90). Same `API_VRID` on both.
 
-**1. Allow HAProxy to bind the VIP before this node owns it.** Without this, the backup's HAProxy cannot start until keepalived moves the address, and failover waits on a process start.
-
+**1. Bind the VIP before this node owns it.** Without this, the backup's HAProxy cannot start until keepalived moves the address. Read the value, write the boot file, then load that file.
 ```sh
-echo "net.ipv4.ip_nonlocal_bind = 1" | sudo tee /etc/sysctl.d/k8s-lb.conf
-sudo sysctl --system
+sysctl -n net.ipv4.ip_nonlocal_bind
+printf 'net.ipv4.ip_nonlocal_bind = 1\n' | sudo tee /etc/sysctl.d/k8s-lb.conf   # survives reboot
+sudo sysctl --system                                                            # apply the file
+sysctl -n net.ipv4.ip_nonlocal_bind                                             # must print 1
 ```
 
 **2. Pinned keepalived and HAProxy** (same versions on both nodes):

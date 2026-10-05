@@ -77,28 +77,35 @@ Profile notes:
 - **GPU** — add `10.0.1.24  k8s-work-4`.
 - There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
 
-**2. Disable swap** — kubeadm will not start while swap is on.
+**2. Disable swap** — kubeadm will not start while swap is on. Read it first. The file change is what survives reboot. `swapoff` only applies that file to the running system.
 ```sh
-sudo swapoff -a                              # turn it off now
-sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab    # keep it off after reboot
+swapon --show                                          # empty means swap is already off
+grep -n swap /etc/fstab                                # the line that comes back at boot
+sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab              # persist: comment the swap line
+sudo swapoff -a                                        # apply the file to this boot
+swapon --show                                          # must stay empty
 ```
 
 **2b. Leave the install-time default route in place.** Step 6 needs outbound apt, and the LAN VIP (`10.0.1.254`) does not exist until keepalived is up in [03-firewall.md](03-firewall.md). Pointing the default route at it here black-holes that apt run. Step 06 replaces the temporary gateway after the VIP answers.
 
-**3. Kernel modules + sysctl** — required on control-plane and worker nodes (skip on firewalls, the API load-balancer pair, the bastion, and etcd-only nodes — they never run kubelet/containerd). Firewalls get forwarding in step 06 instead:
+**3. Kernel modules and sysctl** — control planes and workers only. Skip firewalls, the API proxies, the bastion, and etcd-only nodes. Read the live values, write the boot files, then load those files. Do not use `sysctl -w` or a bare `modprobe` as the change.
 ```sh
-cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf   # load these on every boot
+lsmod | grep -E '^(overlay|br_netfilter)' || true
+sysctl -n net.ipv4.ip_forward
+sysctl -n net.bridge.bridge-nf-call-iptables 2>/dev/null || true   # fails until br_netfilter is loaded
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf                  # loaded on every boot
 overlay
 br_netfilter
 EOF
-sudo modprobe overlay br_netfilter                  # load them now
-
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf         # bridged traffic must pass iptables
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf                        # bridged traffic must pass iptables
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 EOF
-sudo sysctl --system                                # apply the sysctl file
+sudo systemctl restart systemd-modules-load.service                # read modules-load.d
+sudo sysctl --system                                               # read sysctl.d
+sysctl -n net.ipv4.ip_forward                                      # must print 1
+lsmod | grep -E '^(overlay|br_netfilter)'
 ```
 
 **4. Time sync** — both distros already enable `systemd-timesyncd`. Confirm it.

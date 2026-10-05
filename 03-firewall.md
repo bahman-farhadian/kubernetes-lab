@@ -18,13 +18,16 @@ VRID=60                     # firewall VRID; the API pair must use a different o
 
 ## Steps
 
-**1. Enable forwarding** — both firewalls. The cluster nodes do this in the prepare step; these VMs are not Kubernetes nodes.
+**1. Enable forwarding** — both firewalls. These VMs are not Kubernetes nodes. Read the live value, write the boot file, then load that file.
 ```sh
-cat <<EOF | sudo tee /etc/sysctl.d/k8s-fw.conf   # persist across reboot
+sysctl -n net.ipv4.ip_forward
+sysctl -n net.ipv4.conf.all.forwarding
+cat <<EOF | sudo tee /etc/sysctl.d/k8s-fw.conf       # survives reboot
 net.ipv4.ip_forward = 1
 net.ipv4.conf.all.forwarding = 1
 EOF
-sudo sysctl --system                                 # apply it now
+sudo sysctl --system                                 # apply the file, not a one-shot sysctl -w
+sysctl -n net.ipv4.ip_forward                        # must print 1
 ```
 
 **2. Install pinned keepalived** — same version on both nodes, then freeze it.
@@ -77,34 +80,57 @@ sudo systemctl enable --now keepalived   # start VRRP and start it on boot
 ip -br addr show                         # MASTER shows both VIPs; BACKUP does not
 ```
 
-**4. Forward LAN → WAN** (both nodes; nftables). This is a lab NAT, not a hardened edge policy. A minimal install does not ship the `nft` binary — the package is `nftables` on Debian 13 and Ubuntu 26. Docker stays off these VMs: Docker's install docs do not support an `nft` ruleset on a host that runs Docker Engine, which is why NAT lives here and Docker lives on the bastion.
-
+**4. Forward LAN → WAN** — both nodes. This is lab NAT, not a hardened edge. Write `/etc/nftables.conf` and let the service load it. Do not `nft add` into the running ruleset and hope a later reboot keeps it. Docker stays off these VMs.
 ```sh
+sudo nft list ruleset || true                                                                         # read what is loaded now
 sudo apt install -y nftables                                                                          # minimal images do not ship nft
-sudo nft add table ip nat
-sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }'
-sudo nft add rule ip nat postrouting oifname "$WAN_IF" masquerade                                     # LAN clients leave via WAN
-sudo nft add table ip filter
-sudo nft add chain ip filter forward '{ type filter hook forward priority 0; policy drop; }'         # drop everything else
-sudo nft add rule ip filter forward ct state established,related accept
-sudo nft add rule ip filter forward iifname "$LAN_IF" oifname "$WAN_IF" accept
-sudo nft add rule ip filter forward iifname "$WAN_IF" oifname "$LAN_IF" ct state established,related accept
-sudo nft list ruleset | sudo tee /etc/nftables.conf                                                   # keep the ruleset across reboot
-sudo systemctl enable nftables
+sudo tee /etc/nftables.conf <<EOF
+#!/usr/sbin/nft -f
+flush ruleset
+table ip nat {
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        oifname "$WAN_IF" masquerade
+    }
+}
+table ip filter {
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        ct state established,related accept
+        iifname "$LAN_IF" oifname "$WAN_IF" accept
+        iifname "$WAN_IF" oifname "$LAN_IF" ct state established,related accept
+    }
+}
+EOF
+sudo nft -c -f /etc/nftables.conf                                                                     # syntax check, no change yet
+sudo systemctl enable --now nftables                                                                  # boot file becomes the live ruleset
+sudo nft list ruleset                                                                                 # masquerade is present
 ```
 
-**5. Point the cluster at the LAN VIP** — on every **non-firewall** VM, replace the temporary default route from [02-prepare.md](02-prepare.md) with `10.0.1.254`. Do this only after step 3 shows the VIP on the MASTER.
-
+**5. Default gateway** — every non-firewall VM, only after step 3 shows the VIP on the MASTER. Read the live route and the saved network config. Write the gateway into that saved config, then reload it. An `ip route replace` alone is gone at the next reboot.
 ```sh
+ip route show default
 IFACE=$(ip -br addr show | awk '/10\.0\.1\./ {print $1; exit}')
 echo "LAN iface: $IFACE"                                              # stop if this is not the LAN NIC
-sudo ip route replace default via 10.0.1.254 dev "$IFACE"             # live route; persist it below
-ip route | grep default                                                # must show via 10.0.1.254
-ping -c1 10.0.1.254                                                    # gateway answers
-curl -sI https://deb.debian.org | head -1                             # outbound NAT works; Ubuntu: archive.ubuntu.com
+if systemctl is-active --quiet NetworkManager; then
+  nmcli -f NAME,DEVICE connection show                                # pick the LAN connection name
+  sudo nmcli connection modify "<connection>" ipv4.gateway 10.0.1.254 ipv4.never-default no
+  sudo nmcli connection up "<connection>"                             # apply the saved connection
+elif ls /etc/netplan/*.yaml >/dev/null 2>&1; then
+  sudo grep -n gateway /etc/netplan/*.yaml || true                    # read before editing
+  echo "set gateway 10.0.1.254 under the LAN NIC in that yaml, then:"
+  sudo netplan generate && sudo netplan apply
+else
+  grep -n -E "iface ${IFACE}|gateway" /etc/network/interfaces || true
+  sudo sed -i '/^[[:space:]]*gateway /d' /etc/network/interfaces
+  sudo sed -i "/^iface ${IFACE} /a \\    gateway 10.0.1.254" /etc/network/interfaces
+  grep -n gateway /etc/network/interfaces                            # the line is inside the LAN iface stanza
+  sudo systemctl restart networking                                  # load the file; SSH drops for a moment
+fi
+ip route show default                                                  # via 10.0.1.254
+ping -c1 10.0.1.254
+curl -sI https://deb.debian.org | head -1                             # Ubuntu: archive.ubuntu.com
 ```
-
-Persist it or the next reboot goes back to the temporary gateway (or nowhere). ifupdown: on the stanza that already has this VM's `10.0.1.0/24` address, set `gateway 10.0.1.254` and delete any other `gateway` line. NetworkManager: `nmcli con modify <connection> ipv4.gateway 10.0.1.254 && nmcli con up <connection>`.
 
 Failover check: `sudo systemctl stop keepalived` on MASTER; VIPs must appear on BACKUP within a couple of seconds; restore keepalived on MASTER afterward.
 
