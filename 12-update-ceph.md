@@ -45,7 +45,7 @@ sudo apt-mark hold ceph-osd
 sudo systemctl restart ceph-osd@$(ls /var/lib/ceph/osd | grep -oP 'ceph-\K[0-9]+')
 sudo ceph -s   # HEALTH_OK (or HEALTH_WARN with noout set) before moving to the next node
 ```
-Repeat on the other workers (including `k8s-work-4` on GPU).
+Repeat on `k8s-work-2` and `k8s-work-3`. `k8s-work-4` has no OSD.
 
 **6. Clear `noout` and do a final check:**
 ```sh

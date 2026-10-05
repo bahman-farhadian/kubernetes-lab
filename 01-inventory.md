@@ -116,16 +116,16 @@ One row per VM type. The scenario tables below repeat these sizes with names and
 | k8s-ctrl (external, no etcd) | 2 | 8 GB | 30 GB | — | Scenarios 3 and 4, two nodes |
 | k8s-etcd | 1 | 4 GB | 20 GB | — | Scenarios 3 and 4, three nodes |
 | k8s-work-1/2/3 | 4 | 24 GB | 20 GB | 200 GB | All four scenarios |
-| k8s-work-4 (GPU) | 2 | 16 GB | 20 GB | 200 GB | Scenarios 2 and 4 only |
+| k8s-work-4 (GPU) | 2 | 16 GB | 20 GB | — | Scenarios 2 and 4 only. Not a Ceph node. |
 
 Scenario totals. Only one row is powered on at a time. Host RAM left is 128 GB minus the guest total.
 
 | Scenario | VMs | vCPU | Guest RAM | Root | Ceph OSD | Host RAM left |
 |---|---|---|---|---|---|---|
 | 1. Stacked | 11 | 26 | 106 GB | 250 GB | 600 GB | 22 GB |
-| 2. Stacked + GPU | 12 | 28 | 122 GB | 270 GB | 800 GB | 6 GB |
+| 2. Stacked + GPU | 12 | 28 | 122 GB | 270 GB | 600 GB | 6 GB |
 | 3. External etcd | 13 | 27 | 110 GB | 280 GB | 600 GB | 18 GB |
-| 4. External etcd + GPU | 14 | 29 | 126 GB | 300 GB | 800 GB | 2 GB |
+| 4. External etcd + GPU | 14 | 29 | 126 GB | 300 GB | 600 GB | 2 GB |
 
 ## 1. Stacked etcd
 
@@ -148,12 +148,12 @@ Scenario totals. Only one row is powered on at a time. Host RAM left is 128 GB m
 
 ## 2. Stacked etcd + GPU
 
-Same eleven VMs. `k8s-work-4` is 16 GB, not 24 GB. At 24 GB this scenario was 130 GB and did not fit.
+Same eleven VMs. `k8s-work-4` is 16 GB and has no Ceph disk. At 24 GB this scenario was 130 GB and did not fit.
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
-| 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | 200 GB |
-| | **VM TOTALS (12 VMs)** | | | **28** | **122 GB** | **270 GB** | **800 GB** |
+| 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | — |
+| | **VM TOTALS (12 VMs)** | | | **28** | **122 GB** | **270 GB** | **600 GB** |
 
 122 GB leaves 6 GB on the host. Driver and device plugin: [14-gpu.md](14-gpu.md).
 
@@ -182,12 +182,12 @@ Control plane drops to 2 nodes. etcd moves to 3 smaller VMs. Apiserver is statel
 
 ## 4. External etcd + GPU
 
-Same as scenario 3, plus the same 16 GB GPU worker.
+Same as scenario 3, plus the same 16 GB GPU worker. It does not join Ceph.
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
-| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | 200 GB |
-| | **VM TOTALS (14 VMs)** | | | **29** | **126 GB** | **300 GB** | **800 GB** |
+| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | — |
+| | **VM TOTALS (14 VMs)** | | | **29** | **126 GB** | **300 GB** | **600 GB** |
 
 126 GB leaves 2 GB on the host. That is the tightest scenario. Do not raise the GPU worker back to 24 GB: this total would pass 128 GB.
 

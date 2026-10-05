@@ -38,7 +38,7 @@ These are settled for the whole manual — later steps assume them rather than r
 | Ingress | Traefik (ingress-nginx is being sunset upstream) |
 | Bastion support plane | Nexus + Prometheus + Grafana as **Docker Compose** on `k8s-bastion` ([04-bastion.md](04-bastion.md)). `kubectl` and Helm 3 are installed there during [05-deploy-kubernetes.md](05-deploy-kubernetes.md). API HAProxy is **not** on this VM. `node_exporter` stays systemd on every VM. |
 | Cache | Nexus (in that Compose stack) proxies apt and container registries so each object is fetched from the internet once. |
-| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there — [14-gpu.md](14-gpu.md) |
+| GPU (GPU profile only) | `k8s-work-4` is a VM with the GPU passed straight through to it (PCI passthrough); NVIDIA driver + container toolkit + plain Kubernetes device plugin inside the guest, no GPU Operator/MIG/time-slicing; node is tainted so only pods that explicitly tolerate it can be scheduled there. It is not a Ceph node — [14-gpu.md](14-gpu.md) |
 | Container-count philosophy | Kubernetes and Ceph are systemd + containerd on cluster nodes (kubeadm model). Lab-support apps that must stay *outside* the cluster (Nexus, Prometheus, Grafana) run as Compose on a non-k8s VM whose host daemon is Docker. Do not put those apps in-cluster, and do not put Docker next to kubelet. |
 
 ## Version pinning and the upgrade exercise

@@ -10,7 +10,7 @@ Distro apt only ever carries one Ceph release per OS release, which leaves nothi
 
 ## Steps — native Ceph cluster (run on `k8s-work-1/2/3`)
 
-**GPU profile:** `k8s-work-4` also gets an OSD (same `ceph-volume` step). Mons stay on work-1/2/3 for quorum of 3.
+Ceph stays on these three workers in every scenario. `k8s-work-4` is a GPU node only. Do not install Ceph there and do not give it an OSD.
 
 **1. Add Ceph's repo and install a pinned release** (all OSD nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases before running, and see the Debian 13 caveat above):
 ```sh
@@ -27,7 +27,7 @@ sudo apt install -y ceph-mon=${CEPH_DEPLOY_VERSION} ceph-mgr=${CEPH_DEPLOY_VERSI
   ceph-osd=${CEPH_DEPLOY_VERSION} ceph-common=${CEPH_DEPLOY_VERSION}
 sudo apt-mark hold ceph-mon ceph-mgr ceph-osd ceph-common
 ```
-Use the same `CEPH_DEPLOY_VERSION` on all three (four, GPU) nodes. On `k8s-work-4` you only need `ceph-osd` + `ceph-common` if you prefer not to run a fourth mon/mgr.
+Use the same `CEPH_DEPLOY_VERSION` on all three nodes.
 
 **2. Generate cluster identity + config** (once, e.g. on `k8s-work-1`):
 ```sh
@@ -84,7 +84,7 @@ sudo ceph auth get-or-create client.bootstrap-osd \
   mon 'profile bootstrap-osd' mgr 'allow r' \
   -o /var/lib/ceph/bootstrap-osd/ceph.keyring
 ```
-Copy `/var/lib/ceph/bootstrap-osd/ceph.keyring` (and `/etc/ceph/ceph.conf` if not already there) to every OSD node (`k8s-work-1/2/3`, plus `k8s-work-4` on GPU).
+Copy `/var/lib/ceph/bootstrap-osd/ceph.keyring` (and `/etc/ceph/ceph.conf` if not already there) to `k8s-work-2` and `k8s-work-3`.
 
 **7. Bring up the OSD** on each worker's dedicated Ceph disk (confirm the device name with `lsblk` first — don't assume `/dev/sdb`):
 ```sh
@@ -94,7 +94,7 @@ sudo ceph-volume lvm create --data /dev/sdb
 
 **8. Verify:**
 ```sh
-sudo ceph -s   # expect 3 mons in quorum, 3 osds up/in (4 osds on GPU)
+sudo ceph -s   # expect 3 mons in quorum, 3 osds up/in
 ```
 
 ## Steps — expose storage to Kubernetes via Ceph-CSI
