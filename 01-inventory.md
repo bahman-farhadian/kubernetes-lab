@@ -10,6 +10,20 @@ The cluster runs on the server: **128 GB RAM**. The 32 GB machine is not a deplo
 
 Guest RAM stays under 128 GB in every scenario so the hypervisor has memory left. Stacked keeps etcd inside three 8 GB control planes (24 GB for that tier). External moves etcd onto three 4 GB VMs and keeps two 8 GB apiservers (28 GB for that tier). More machines, more RAM. External plus the GPU worker is the largest, at 126 GB.
 
+## KVM host
+
+This is a lab. Every VM of a scenario runs on **one** KVM host. The firewall pair, the API pair, and the three etcd members only protect against a VM dying. If this host goes down, every VM goes down with it. There is no second server.
+
+| Resource | The one KVM host |
+|---|---|
+| RAM | 128 GB |
+| vCPU | 24 |
+| Disk for VM root disks | 320 GB or more. The largest scenario uses 300 GB of root disks. |
+| Disk for Ceph OSDs | 600 GB or more. Three workers, 200 GB each. The GPU VM has no OSD. |
+| How many clusters at once | One. The four scenarios are not added together. |
+
+Guest vCPU peaks at 29, so scenario 4 oversubscribes the 24 host CPUs. That is acceptable here. Guest RAM must stay under 128 GB. Scenario 4 uses 126 GB, which leaves only 2 GB for the host and for QEMU. That row is the one that is tight.
+
 Rollout: [README.md](README.md#rollout-plan).
 
 LAN addresses here are **examples**. Use your own when you provision. Do not commit site WAN or LAN addresses into this repo. Each firewall has a second NIC on WAN; WAN addresses stay off these tables.
