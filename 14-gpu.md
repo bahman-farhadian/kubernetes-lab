@@ -4,7 +4,7 @@
 
 **Status:** Outline — fill in with real commands on the first GPU run. PCI passthrough / IOMMU is hypervisor-level and out of scope (see [00-overview.md](00-overview.md)); this repo assumes the GPU is already visible inside the VM.
 
-Do this only when `k8s-work-4` is in the table you deployed ([01-inventory.md](01-inventory.md), 12 GB, no Ceph disk). It should already have been joined in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Do not add it to the Ceph cluster.
+Do this only when `k8s-work-4` is in the table you deployed ([01-inventory.md](01-inventory.md), 12 GB or 16 GB, no Ceph disk). It should already have been joined in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Do not add it to the Ceph cluster.
 
 ## Covers
 - Confirm the GPU is visible in the guest (`lspci`, `nvidia-smi` after the driver)

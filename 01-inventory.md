@@ -18,7 +18,7 @@ One KVM server runs every VM. Measured on that host (Ryzen 9 3900X). Usable RAM 
 |---|---|
 | Servers | 1 |
 | CPU | AMD Ryzen 9 3900X, 12 cores, 24 threads. AMD-V. Boost is off. |
-| RAM | 128 GB. Plan the server as empty. |
+| RAM | 128 GB. Idle host uses about 2 GB. Plan the server as empty. |
 | OS disk | Samsung 850 EVO 250GB. 32G on `/`, 192G on `/data-root`. |
 | Second disk | Samsung 970 EVO Plus 250GB. 192G on `/data-root/sssd`. |
 | Third disk | Samsung 970 EVO Plus 1TB. 888G on `/data-root/lssd`. |
@@ -28,7 +28,7 @@ A single host cannot provide redundancy or failover. There is no second server t
 
 The host can still provide fault tolerance for a VM, while the host itself stays up. One firewall VM can die and the other keeps the gateway. One API proxy can die and the other keeps `10.0.1.10`. One control plane or one etcd member can die and the cluster still has quorum. One storage worker can die and Ceph still has two OSDs and two monitors. That is tolerance of a guest failure, not failover of the server.
 
-Whoever creates the VMs sets a 50% CPU share on them. That setting is not part of this procedure. Under that share, 2 guest vCPUs count as 1 host CPU, so one scenario stays at or under 44 vCPUs. 44 guest vCPUs are 22 host CPUs. The host is 12 cores and 24 threads. Guest RAM is in GB against the 128 GB above.
+Whoever creates the VMs sets a 50% CPU share on them. That setting is not part of this procedure. Under that share, 2 guest vCPUs count as 1 host CPU, so one scenario stays at or under 44 vCPUs. 44 guest vCPUs are 22 host CPUs. The host is 12 cores and 24 threads. Guest RAM is in GB against the 128 GB above. The idle host uses about 2 GB, so that is the reserve. Guests may use 126 GB.
 
 The 200 GB Ceph disks are on `k8s-work-1/2/3` only. In this lab all three sit on the one 888G SSD. That is accepted. It is not a production disk layout. The GPU VM has no OSD. Plan `/data-root`, `/data-root/sssd`, and `/data-root/lssd` as empty for this cluster. Do not put VM images on the 32G `/`.
 
@@ -138,16 +138,16 @@ One row per VM type. The scenario tables below repeat these sizes with names and
 | k8s-ctrl (external, no etcd) | 4 | 8 GB | 30 GB | — | Scenarios 3 and 4, two nodes |
 | k8s-etcd | 2 | 4 GB | 20 GB | — | Scenarios 3 and 4, three nodes |
 | k8s-work-1/2/3 | 6 | 24–28 GB | 20 GB | 200 GB | RAM changes per scenario so the host stays at 90–95% |
-| k8s-work-4 (GPU) | 2 or 4 | 12 GB | 20 GB | — | Scenarios 2 and 4. Not a Ceph node. |
+| k8s-work-4 (GPU) | 2 or 4 | 12 or 16 GB | 20 GB | — | 12 GB in scenario 2, 16 GB in scenario 4. Not a Ceph node. |
 
-Scenario totals. Only one row is powered on at a time. The ceiling is 95% of the host: **42 vCPUs** (95% of 44) and **122 GB** (95% of 128 GB). 90% is 40 vCPUs and 115 GB. Each scenario below sits in that band. The full VM list for each one follows.
+Scenario totals. Only one row is powered on at a time. vCPU stays at or under 42 (95% of 44). RAM may use all but 2 GB of the 128 GB, because that is what the idle host uses. The full VM list for each scenario follows.
 
 | Scenario | VMs | vCPU | Guest RAM | Of 44 vCPUs | Of 128 GB | Root | Ceph OSD |
 |---|---|---|---|---|---|---|---|
 | 1. Stacked | 11 | 40 | 118 GB | 91% | 92% | 250 GB | 600 GB |
 | 2. Stacked + GPU | 12 | 42 | 118 GB | 95% | 92% | 270 GB | 600 GB |
 | 3. External etcd | 13 | 40 | 122 GB | 91% | 95% | 280 GB | 600 GB |
-| 4. External etcd + GPU | 14 | 42 | 122 GB | 95% | 95% | 300 GB | 600 GB |
+| 4. External etcd + GPU | 14 | 42 | 126 GB | 95% | 98% | 300 GB | 600 GB |
 
 ## Where each scenario lands
 
@@ -158,9 +158,9 @@ VM root disks are image files on the two 192G volumes together (`/data-root` and
 | 1. Stacked | 40, 91% | 118 GB, 10 GB left | 250 GB, fits | 600 GB, fits |
 | 2. Stacked + GPU | 42, 95% | 118 GB, 10 GB left | 270 GB, fits | 600 GB, fits |
 | 3. External etcd | 40, 91% | 122 GB, 6 GB left | 280 GB, fits | 600 GB, fits |
-| 4. External etcd + GPU | 42, 95% | 122 GB, 6 GB left | 300 GB, fits | 600 GB, fits |
+| 4. External etcd + GPU | 42, 95% | 126 GB, 2 GB left | 300 GB, fits | 600 GB, fits |
 
-The 50% share is set on the VM by the person who creates it. Scenario 4 used to be 44 vCPUs and 126 GB, which is the whole CPU cap and 98% of the RAM. The GPU VM there is now 2 vCPUs and 12 GB, and the workers are 24 GB instead of 28 GB, so that row stays inside 95%. The three Ceph images share the 888G SSD on purpose. Putting root disks and Ceph disks on that same SSD together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why the root disks stay on the two 192G volumes.
+The 50% share is set on the VM by the person who creates it. Scenario 4 leaves 2 GB, which matches the idle host. The GPU VM there is 2 vCPUs and 16 GB, and the workers are 24 GB. The three Ceph images share the 888G SSD on purpose. Putting root disks and Ceph disks on that same SSD together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why the root disks stay on the two 192G volumes.
 
 ## 1. Stacked etcd
 
@@ -228,7 +228,7 @@ Control plane drops to 2 nodes. etcd moves to 3 smaller VMs. Apiserver is statel
 
 ## 4. External etcd + GPU
 
-This was 44 vCPUs and 126 GB: the whole CPU cap, and 98% of the RAM. Workers are 24 GB instead of 28 GB, and the GPU VM is 2 vCPUs and 12 GB. It does not join Ceph.
+Workers are 24 GB instead of 28 GB, so this row can keep a 16 GB GPU VM and still leave 2 GB on the host. The GPU VM is 2 vCPUs. It does not join Ceph.
 
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
@@ -245,10 +245,10 @@ This was 44 vCPUs and 126 GB: the whole CPU cap, and 98% of the RAM. Workers are
 | 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 6 | 24 GB | 20 GB | 200 GB |
 | 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 6 | 24 GB | 20 GB | 200 GB |
 | 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 6 | 24 GB | 20 GB | 200 GB |
-| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 12 GB | 20 GB | — |
-| | **VM TOTALS (14 VMs)** | | | **42** | **122 GB** | **300 GB** | **600 GB** |
+| 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | — |
+| | **VM TOTALS (14 VMs)** | | | **42** | **126 GB** | **300 GB** | **600 GB** |
 
-42 vCPUs is 95% of 44. 122 GB is 95% of 128 GB, so 6 GB stays with the host. Do not put the 16 GB GPU size back. That returns this row to 126 GB.
+42 vCPUs is 95% of 44. 126 GB leaves 2 GB of the 128 GB. That matches the idle host, which uses about 2 GB with no VMs running.
 
 ## Prerequisites
 - [00-overview.md](00-overview.md)

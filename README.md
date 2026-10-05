@@ -55,7 +55,7 @@ Four scenarios on one KVM host (24 threads, 128 GB RAM, three SSDs), never at th
 | **Stacked** | 11 | 40 vCPU, 118 GB (92% of the host). Deploy this first. |
 | **Stacked + GPU** | 12 | 42 vCPU, 118 GB. [14-gpu.md](14-gpu.md). |
 | **External etcd** | 13 | 40 vCPU, 122 GB. |
-| **External etcd + GPU** | 14 | 42 vCPU, 122 GB. |
+| **External etcd + GPU** | 14 | 42 vCPU, 126 GB. 2 GB stays with the host. |
 
 Each row is under 128 GB. They are not added together. vCPU, disk, and the per-VM sizes are in [01-inventory.md](01-inventory.md#vm-resources).
 
