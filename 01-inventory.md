@@ -12,17 +12,22 @@ Guest RAM stays under 128 GB in every scenario so the hypervisor has memory left
 
 ## KVM host
 
-This is a lab. Every VM of a scenario runs on **one** KVM host. The firewall pair, the API pair, and the three etcd members only protect against a VM dying. If this host goes down, every VM goes down with it. There is no second server.
+One KVM server runs every VM. This is a lab, so that is the whole physical layer.
 
-| Resource | The one KVM host |
+| Resource | KVM host |
 |---|---|
-| RAM | 128 GB |
+| Servers | 1 |
 | vCPU | 24 |
-| Disk for VM root disks | 320 GB or more. The largest scenario uses 300 GB of root disks. |
-| Disk for Ceph OSDs | 600 GB or more. Three workers, 200 GB each. The GPU VM has no OSD. |
-| How many clusters at once | One. The four scenarios are not added together. |
+| RAM | 128 GB |
+| Root disk | 250 GB |
+| OSD disk | 1 TB |
+| Clusters powered on | 1 |
 
-Guest vCPU peaks at 29, so scenario 4 oversubscribes the 24 host CPUs. That is acceptable here. Guest RAM must stay under 128 GB. Scenario 4 uses 126 GB, which leaves only 2 GB for the host and for QEMU. That row is the one that is tight.
+A single host cannot provide redundancy or failover. There is no second server to take over. If this machine loses power, crashes, or its disk fails, every VM stops and the cluster is down. Keepalived does not help in that case, because both members of a pair are on the same host.
+
+The host can still provide fault tolerance for a VM, while the host itself stays up. One firewall VM can die and the other keeps the gateway. One API proxy can die and the other keeps `10.0.1.10`. One control plane or one etcd member can die and the cluster still has quorum. One storage worker can die and Ceph still has two OSDs and two monitors. That is tolerance of a guest failure, not failover of the server.
+
+Guest vCPU peaks at 29 against these 24 CPUs, so the largest scenario oversubscribes the CPU. Guest RAM peaks at 126 GB of the 128 GB, which leaves 2 GB for KVM itself. The root disk is 250 GB. Only scenario 1 uses 250 GB of VM root disks and fits on it. Scenario 2 needs 270 GB, scenario 3 needs 280 GB, and scenario 4 needs 300 GB. Those three do not fit on this root disk. Ceph's 600 GB of OSD disks does fit on the 1 TB OSD disk. The GPU VM adds no OSD.
 
 Rollout: [README.md](README.md#rollout-plan).
 
