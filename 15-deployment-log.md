@@ -11,11 +11,11 @@ Copy the table below for each profile ([Heavy](README.md#rollout-plan) / GPU) th
 
 ### Profile: _(Heavy / GPU)_ — Scenario _(A stacked / B external)_ — Distro _(Debian 13 / Ubuntu 26)_
 
-| Date | Event | KUBE version | Containerd | Calico | Ceph release/version | Ceph-CSI chart | Traefik chart | node_exporter / Prometheus / Grafana | NVIDIA driver / toolkit / plugin (GPU only) | Notes |
-|---|---|---|---|---|---|---|---|---|---|---|
-| YYYY-MM-DD | Initial deploy | | | | | | | | | |
-| YYYY-MM-DD | K8s upgrade | | | | | | | | | |
-| YYYY-MM-DD | Ceph upgrade | | | | | | | | | |
+| Date       | Event          | KUBE version | Containerd | Calico | Ceph release/version | Ceph-CSI chart | Traefik chart | node_exporter / Prometheus / Grafana | NVIDIA driver / toolkit / plugin (GPU only) | Notes |
+| ---------- | -------------- | ------------ | ---------- | ------ | -------------------- | -------------- | ------------- | ------------------------------------ | ------------------------------------------- | ----- |
+| YYYY-MM-DD | Initial deploy |              |            |        |                      |                |               |                                      |                                             |       |
+| YYYY-MM-DD | K8s upgrade    |              |            |        |                      |                |               |                                      |                                             |       |
+| YYYY-MM-DD | Ceph upgrade   |              |            |        |                      |                |               |                                      |                                             |       |
 
 - **Date** — when the step actually ran, not when it was planned.
 - **Event** — "Initial deploy" ([05-deploy-kubernetes.md](05-deploy-kubernetes.md) through [09-smoke-test.md](09-smoke-test.md)), "K8s upgrade" ([11-update-kubernetes.md](11-update-kubernetes.md)) or "Ceph upgrade" ([12-update-ceph.md](12-update-ceph.md)), or anything else worth a line (cert rotation, node replaced, etc.).

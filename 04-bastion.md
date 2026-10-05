@@ -2,11 +2,11 @@
 
 **Goal:** On `k8s-bastion` only, install a **single-node Docker Engine** and run **three separate Compose projects** — one directory and one `compose.yaml` each:
 
-| App | Directory | Host ports |
-|---|---|---|
-| Nexus | `/opt/nexus` | 8081 (UI/apt), 8082 (docker connector) |
-| Prometheus | `/opt/prometheus` | 9090 |
-| Grafana | `/opt/grafana` | 3000 |
+| App        | Directory         | Host ports                             |
+| ---------- | ----------------- | -------------------------------------- |
+| Nexus      | `/opt/nexus`      | 8081 (UI/apt), 8082 (docker connector) |
+| Prometheus | `/opt/prometheus` | 9090                                   |
+| Grafana    | `/opt/grafana`    | 3000                                   |
 
 Do **not** put all three in one Compose file. Upgrade and restart stay independent.
 
@@ -26,8 +26,8 @@ Docker Engine on this VM is the host daemon for lab-support processes. It is not
 
 ```sh
 sudo apt update
-sudo apt install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
+sudo apt install -y ca-certificates curl          # Docker's repo is fetched over HTTPS
+sudo install -m 0755 -d /etc/apt/keyrings         # keyring directory, mode 0755
 . /etc/os-release
 case "$ID" in
   debian)
@@ -57,16 +57,13 @@ CONTAINERD_IO_VERSION="<containerd.io from madison>"
 COMPOSE_PLUGIN_VERSION="<docker-compose-plugin from madison>"
 sudo apt install -y docker-ce=${DOCKER_CE_VERSION} docker-ce-cli=${DOCKER_CE_VERSION} \
   containerd.io=${CONTAINERD_IO_VERSION} docker-compose-plugin=${COMPOSE_PLUGIN_VERSION}
-sudo apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo systemctl enable --now docker
-sudo docker info
+sudo apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin   # freeze the pin
+sudo systemctl enable --now docker                                                # start the engine
+sudo docker info                                                                   # daemon answers
+sudo mkdir -p /opt/nexus /opt/prometheus /opt/grafana                              # one directory per compose project
 ```
 
 `containerd.io` here is Docker's runtime on the **bastion only**. Cluster nodes use distro `containerd` from [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
-
-```sh
-sudo mkdir -p /opt/nexus /opt/prometheus /opt/grafana
-```
 
 Pin image tags (confirm on Docker Hub; examples below were current-ish in 2026-09).
 
@@ -176,15 +173,15 @@ Datasource URL from inside Grafana: `http://host.docker.internal:9090`. From a b
 
 Create apt proxies for the distro of *this* cluster only, plus docker proxies. Enable a LAN HTTP docker connector on **8082**.
 
-| Name (example) | Format | Remote URL |
-|---|---|---|
-| `apt-debian` / `apt-debian-security` | apt | Debian mirrors (Debian 13 instance only) |
-| `apt-ubuntu` | apt | Ubuntu archive (Ubuntu 26 instance only) |
-| `apt-kubernetes` | apt | `https://pkgs.k8s.io/core:/stable:/v1.36/deb/` |
-| `apt-ceph` | apt | `https://download.ceph.com/debian-squid/` |
-| `docker-dockerio` | docker | `https://registry-1.docker.io` |
-| `docker-k8s` | docker | `https://registry.k8s.io` |
-| `docker-quay` | docker | `https://quay.io` |
+| Name (example)                       | Format | Remote URL                                     |
+| ------------------------------------ | ------ | ---------------------------------------------- |
+| `apt-debian` / `apt-debian-security` | apt    | Debian mirrors (Debian 13 instance only)       |
+| `apt-ubuntu`                         | apt    | Ubuntu archive (Ubuntu 26 instance only)       |
+| `apt-kubernetes`                     | apt    | `https://pkgs.k8s.io/core:/stable:/v1.36/deb/` |
+| `apt-ceph`                           | apt    | `https://download.ceph.com/debian-squid/`      |
+| `docker-dockerio`                    | docker | `https://registry-1.docker.io`                 |
+| `docker-k8s`                         | docker | `https://registry.k8s.io`                      |
+| `docker-quay`                        | docker | `https://quay.io`                              |
 
 ## Steps — point the cluster at Nexus
 

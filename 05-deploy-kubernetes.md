@@ -13,37 +13,25 @@ Every `k8s-ctrl-*` and `k8s-work-*` in the inventory table you circled in [01-in
 
 ## Steps
 
-**1. Install a pinned containerd version from Debian's own repo** (keeps this manual to one apt source per concern — no extra `docker.com` repo), same version on every control-plane/worker node:
+**1. Install pinned containerd** — distro package, same version on every control plane and worker. Hold it in the same step.
 ```sh
 sudo apt update
-apt-cache madison containerd   # list exact available versions — pick one
+apt-cache madison containerd                                          # copy one version string
 CONTAINERD_VERSION="<version from the list above>"
 sudo apt install -y containerd=${CONTAINERD_VERSION}
+sudo apt-mark hold containerd                                         # apt upgrade must not move the runtime
+containerd --version                                                  # kubeadm must accept this version
 ```
-> Verify the version kubeadm expects for your chosen Kubernetes minor (the bootstrap section below) is satisfied: `containerd --version`. If the distro's bundled version is too old, use Docker's official `containerd.io` apt repo instead — check [download.docker.com](https://download.docker.com) for Debian 13 or Ubuntu 26 before adding it. Prefer installing via the Nexus apt proxy from [04-bastion.md](04-bastion.md) so the `.deb` is cached.
+If that version is too old for the Kubernetes minor below, use Docker's `containerd.io` repo instead. Check [download.docker.com](https://download.docker.com) for Debian 13 or Ubuntu 26.
 
-**2. Generate default config and switch to the systemd cgroup driver** (must match kubelet's cgroup driver):
+**2. systemd cgroup driver** — kubelet uses systemd, so containerd must too. Mirrors, if you use them, are [04-bastion.md](04-bastion.md) step 5 and go in before the restart.
 ```sh
 sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
+containerd config default | sudo tee /etc/containerd/config.toml      # package default can disable CRI
 sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-```
-
-**2b. Registry mirrors** — send docker.io / registry.k8s.io / quay.io to Nexus on the bastion (see [04-bastion.md](04-bastion.md) step 5). Then:
-```sh
-sudo systemctl restart containerd
-sudo systemctl enable containerd
-```
-
-**3. Confirm the CRI socket** kubeadm will use:
-```sh
-sudo ctr version
-ls -l /run/containerd/containerd.sock
-```
-
-**4. Hold the package** so `apt upgrade` can't silently change the runtime under a live cluster:
-```sh
-sudo apt-mark hold containerd
+sudo systemctl enable --now containerd                                # start now and on boot
+sudo ctr version                                                       # client can talk to the daemon
+ls -l /run/containerd/containerd.sock                                  # kubeadm uses this socket
 ```
 
 

@@ -14,9 +14,9 @@
 
 ## Verify before continuing
 ```sh
-# from your workstation, once per node
-ssh <user>@<node-ip> 'grep -E "^(ID|VERSION_ID)=" /etc/os-release; sudo -n true && echo "sudo OK"'
-ssh <user>@<node-ip> 'cat /sys/class/dmi/id/product_uuid; cat /etc/machine-id'
+# from the workstation, once per node
+ssh <user>@<node-ip> 'grep -E "^(ID|VERSION_ID)=" /etc/os-release; sudo -n true && echo "sudo OK"'  # distro and passwordless sudo
+ssh <user>@<node-ip> 'cat /sys/class/dmi/id/product_uuid; cat /etc/machine-id'                      # kubeadm rejects duplicates
 ```
 Confirm `ID=debian` and `VERSION_ID="13"`, **or** `ID=ubuntu` and `VERSION_ID="26.04"` / `"26.10"` (whichever Ubuntu 26 ships as), and `sudo` works, for every node in that table.
 
@@ -31,9 +31,9 @@ Every node in the inventory table you circled in [01-inventory.md](01-inventory.
 
 ## Steps
 
-**1. Hostname and `/etc/hosts`** — run on every node, adjust per node:
+**1. Hostname and `/etc/hosts`** — one inventory name per VM. The hosts block is the same on every node.
 ```sh
-sudo hostnamectl set-hostname k8s-ctrl-1   # match the name from 01-inventory.md
+sudo hostnamectl set-hostname k8s-ctrl-1   # name from the inventory table for this VM
 ```
 Append the matching block below to `/etc/hosts` on **every** node (same block everywhere). These are the **example** LAN addresses from [01-inventory.md](01-inventory.md) — substitute yours if they differ. Do not add WAN addresses here.
 
@@ -77,41 +77,41 @@ Profile notes:
 - **GPU** — add `10.0.1.24  k8s-work-4`.
 - There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
 
-**2. Disable swap** — Kubernetes refuses to start with swap on:
+**2. Disable swap** — kubeadm will not start while swap is on.
 ```sh
-sudo swapoff -a
-sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab
+sudo swapoff -a                              # turn it off now
+sudo sed -i '/\sswap\s/s/^/#/' /etc/fstab    # keep it off after reboot
 ```
 
 **2b. Leave the install-time default route in place.** Step 6 needs outbound apt, and the LAN VIP (`10.0.1.254`) does not exist until keepalived is up in [03-firewall.md](03-firewall.md). Pointing the default route at it here black-holes that apt run. Step 06 replaces the temporary gateway after the VIP answers.
 
 **3. Kernel modules + sysctl** — required on control-plane and worker nodes (skip on firewalls, the API load-balancer pair, the bastion, and etcd-only nodes — they never run kubelet/containerd). Firewalls get forwarding in step 06 instead:
 ```sh
-cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf   # load these on every boot
 overlay
 br_netfilter
 EOF
-sudo modprobe overlay br_netfilter
+sudo modprobe overlay br_netfilter                  # load them now
 
-cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf         # bridged traffic must pass iptables
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 EOF
-sudo sysctl --system
+sudo sysctl --system                                # apply the sysctl file
 ```
 
-**4. Time sync** — Debian 13 and Ubuntu 26 ship `systemd-timesyncd` enabled by default; just confirm it:
+**4. Time sync** — both distros already enable `systemd-timesyncd`. Confirm it.
 ```sh
-timedatectl status | grep "synchronized"
+timedatectl status | grep "synchronized"   # must say yes before certificates are issued
 ```
 
 **5. Host packet filter** — on cluster nodes, if `nftables`/`ufw` is active, open the LAN port list from [01-inventory.md](01-inventory.md); otherwise leave it disabled and rely on the firewall pair plus network isolation. Do not confuse this with `k8s-fw-*` (those VMs are [03-firewall.md](03-firewall.md)).
 
-**6. Base packages + full upgrade**, then hold nothing here yet (no cluster packages installed in this step):
+**6. Base packages** — still on the temporary default route. No cluster packages yet, so nothing to hold.
 ```sh
-sudo apt update && sudo apt full-upgrade -y
-sudo apt install -y curl gnupg ca-certificates apt-transport-https
+sudo apt update && sudo apt full-upgrade -y                              # current OS before any repo is added
+sudo apt install -y curl gnupg ca-certificates apt-transport-https       # needed to add signed apt repos later
 ```
 
 ## Prerequisites
