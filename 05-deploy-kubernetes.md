@@ -164,96 +164,79 @@ Open this file only if you circled **Scenario A (stacked etcd)** in [01-inventor
 
 ## Steps
 
-**1. On every control-plane node** (`k8s-ctrl-1/2/3`) — add the Kubernetes apt repo for the minor you're **deploying** (deliberately one minor behind current stable — see [00-overview.md](00-overview.md#version-pinning-and-the-upgrade-exercise) — so [11-update-kubernetes.md](11-update-kubernetes.md) has a real upgrade to walk through), then install an **exact pinned patch version**, not just whatever `apt install` picks up latest in that minor:
+**1. Kubernetes packages on every control plane** — one minor behind current stable, same pin on all three. The later upgrade needs that gap.
 ```sh
-KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one behind = v1.36 — reverify at kubernetes.io/releases, it moves every ~4 months
+KUBE_DEPLOY_MINOR=v1.36   # one behind current stable; recheck kubernetes.io/releases
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg   # pkgs.k8s.io signing key
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt update
-
-apt-cache madison kubeadm   # list exact available patch versions in this minor — pick one; 1.36.4 was latest as of 2026-09
-KUBE_DEPLOY_VERSION="1.36.4-1.1"   # confirm this exact string (Debian package revision suffix) against the madison output above
-
+apt-cache madison kubeadm                                    # copy the exact package string
+KUBE_DEPLOY_VERSION="1.36.4-1.1"                             # must match madison, including the -1.1 suffix
 sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION} kubectl=${KUBE_DEPLOY_VERSION}
-sudo apt-mark hold kubelet kubeadm kubectl
-sudo systemctl enable kubelet
+sudo apt-mark hold kubelet kubeadm kubectl                   # apt upgrade must not move these
+sudo systemctl enable kubelet                                # kubeadm starts it; do not start it yet
 ```
 Use the **same** `KUBE_DEPLOY_VERSION` on all three control-plane nodes — a version mismatch between them is exactly the kind of thing this pinning is meant to prevent.
 
-**2. On `k8s-ctrl-1` only** — initialize the cluster against the HAProxy VIP, with `--upload-certs` so the other control-plane nodes can join without manual cert copying. Pass `--kubernetes-version` explicitly so kubeadm doesn't reach out for whatever it thinks is latest — it must match the packages just installed:
+**2. `kubeadm init` on `k8s-ctrl-1` only** — the endpoint is the API VIP, not this node's own IP. Save both join commands it prints.
 ```sh
 sudo kubeadm init \
-  --control-plane-endpoint "10.0.1.10:6443" \
-  --upload-certs \
-  --pod-network-cidr "192.168.0.0/16" \
-  --kubernetes-version "v${KUBE_DEPLOY_VERSION%%-*}"
-```
-Save the two `kubeadm join` commands it prints (one with `--control-plane --certificate-key ...`, one without). Then, still on `k8s-ctrl-1`:
-```sh
+  --control-plane-endpoint "10.0.1.10:6443" \                  # HAProxy VIP
+  --upload-certs \                                             # other control planes can join for 2 hours
+  --pod-network-cidr "192.168.0.0/16" \                        # must match Calico later
+  --kubernetes-version "v${KUBE_DEPLOY_VERSION%%-*}"           # same version as the packages
 mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config       # admin kubeconfig for this user
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
-**3. On `k8s-ctrl-2` and `k8s-ctrl-3`** — run the saved `--control-plane` join command from step 2 (the `--certificate-key` is only valid for 2 hours; if it's expired, regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs`):
+**3. Join the other control planes** — paste the `--control-plane` command from step 2. The certificate key lasts 2 hours. Regenerate it on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs` if it expired.
 ```sh
 sudo kubeadm join 10.0.1.10:6443 --token <token> \
   --discovery-token-ca-cert-hash sha256:<hash> \
-  --control-plane --certificate-key <key>
+  --control-plane --certificate-key <key>          # makes this node a control plane, not a worker
 ```
 
-**4. Verify etcd quorum** (from `k8s-ctrl-1`). Use the admin kubeconfig — `sudo kubectl` looks at `/root/.kube/config`, which is empty:
+**4. Check etcd** — from `k8s-ctrl-1`. Do not use `sudo kubectl`; that looks at root's empty kubeconfig.
 ```sh
 kubectl --kubeconfig $HOME/.kube/config -n kube-system exec etcd-k8s-ctrl-1 -- etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key \
-  member list
+  member list                                          # expect 3 members, all started
 ```
 Same thing as `sudo kubectl --kubeconfig /etc/kubernetes/admin.conf ...`. Expect 3 members, all `started`. Nodes stay `NotReady` until the Calico section below — expected at this point.
 
-**5. Install `kubectl` and Helm on `k8s-bastion`.** This VM is the admin host. The API VIP belongs to `k8s-lb-1` / `k8s-lb-2`, earlier in this file. Control-plane nodes keep the `kubectl` from step 1 for break-glass. Do not install `kubelet` or `kubeadm` on the bastion. Calico, Ceph-CSI, and Traefik run from here.
-
-`kubectl` — same Kubernetes apt repo as the cluster nodes (step 1; the bastion never ran that step):
+**5. `kubectl` and Helm on the bastion** — admin host only. Do not install `kubelet` or `kubeadm` here. Debian's package named `helm` is Emacs, so Helm 3 comes from the upstream tarball (`v3.22.0`; Helm 4 exists, this lab stays on 3).
 ```sh
-KUBE_DEPLOY_MINOR=v1.36            # MUST match step 1
-KUBE_DEPLOY_VERSION="1.36.4-1.1"   # MUST match step 1
+KUBE_DEPLOY_MINOR=v1.36            # same minor as step 1
+KUBE_DEPLOY_VERSION="1.36.4-1.1"   # same pin as step 1
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt update
-sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}
+sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}          # kubectl only
 sudo apt-mark hold kubectl
-```
-
-Helm 3 from the upstream tarball. Debian's apt package named `helm` is Emacs, not this. `v3.22.0` is the last Helm 3 feature release (2026-09-09); security fixes continue through 2027-02-10. Helm 4 is out — this lab stays on 3. Re-check [github.com/helm/helm/releases](https://github.com/helm/helm/releases) before running.
-```sh
-HELM_VERSION="v3.22.0"
+HELM_VERSION="v3.22.0"                                       # recheck github.com/helm/helm/releases
 curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz
 tar -xzf /tmp/helm.tgz -C /tmp
 sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
 helm version
 ```
 
-Kubeconfig — the bastion is not assumed to have an SSH key to `k8s-ctrl-1`. Copy via the workstation, which can already reach both:
-
+**6. Copy the kubeconfig to the bastion** — the bastion has no SSH key to `k8s-ctrl-1`, so the workstation copies it.
 ```sh
-# on the workstation
-scp <user>@<k8s-ctrl-1-ip>:.kube/config /tmp/k8s-admin.conf
+scp <user>@<k8s-ctrl-1-ip>:.kube/config /tmp/k8s-admin.conf          # from the workstation
 ssh <user>@<k8s-bastion-ip> 'mkdir -p ~/.kube && chmod 700 ~/.kube'
 scp /tmp/k8s-admin.conf <user>@<k8s-bastion-ip>:.kube/config
 rm -f /tmp/k8s-admin.conf
-```
-```sh
-# on k8s-bastion
-chmod 600 ~/.kube/config
-kubectl get nodes   # NotReady until Calico is expected
+ssh <user>@<k8s-bastion-ip> 'chmod 600 ~/.kube/config && kubectl get nodes'   # NotReady until Calico
 ```
 If the bastion can already SSH to `k8s-ctrl-1`, `scp k8s-ctrl-1:.kube/config ~/.kube/config` there replaces the workstation hop.
 
@@ -319,7 +302,7 @@ apt-cache madison etcd-server   # list exact available versions — pick one
 ETCD_VERSION="<version from the list above>"
 sudo apt install -y etcd-server=${ETCD_VERSION} etcd-client=${ETCD_VERSION}
 sudo apt-mark hold etcd-server etcd-client
-sudo systemctl stop etcd   # reconfigure before first real start
+sudo systemctl stop etcd          # configure TLS before the first real start
 ```
 
 **2. Generate a CA, per-node server certs, and an apiserver client cert** — run once on `k8s-etcd-1`, then distribute. Debian 13 is OpenSSL 3: `openssl x509 -req` does **not** copy SAN from the CSR unless you pass `-copy_extensions copy`. Without SAN, etcd TLS fails hostname/IP checks.
@@ -438,12 +421,9 @@ etcd:
     keyFile: /etc/kubernetes/pki/apiserver-etcd-client.key
 EOF
 
-sudo kubeadm init --config /root/kubeadm-config.yaml --upload-certs
-```
-Save the two `kubeadm join` commands it prints. Then, still on `k8s-ctrl-1`:
-```sh
+sudo kubeadm init --config /root/kubeadm-config.yaml --upload-certs   # no --external-etcd-* flags exist
 mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config                # save both join commands it printed
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
@@ -555,18 +535,18 @@ sudo apt-mark hold kubelet kubeadm
 sudo systemctl enable kubelet
 ```
 
-**2. Join** — run the plain (non-`--control-plane`) join command printed by `kubeadm init` in the bootstrap section above:
+**2. Join** — the command without `--control-plane`, printed by `kubeadm init`.
 ```sh
 sudo kubeadm join 10.0.1.10:6443 --token <token> \
-  --discovery-token-ca-cert-hash sha256:<hash>
+  --discovery-token-ca-cert-hash sha256:<hash>    # worker only; no certificate-key
 ```
 Token expired or lost? Generate a new one from `k8s-ctrl-1`: `sudo kubeadm token create --print-join-command`.
 
 **GPU profile:** also join `k8s-work-4` here (same commands). Driver, device plugin, and taint are [14-gpu.md](14-gpu.md), after the rest of the cluster is up.
 
-**3. Verify** from `k8s-bastion` (`kubectl` and kubeconfig from the bootstrap section above):
+**3. Verify** from `k8s-bastion`. Nodes stay `NotReady` until Calico.
 ```sh
-kubectl get nodes -o wide
+kubectl get nodes -o wide    # every worker is listed; Ready comes after Calico
 ```
 All nodes show up but stay `NotReady` until [05-deploy-kubernetes.md](05-deploy-kubernetes.md) installs pod networking — expected here.
 
@@ -592,24 +572,20 @@ flowchart LR
 
 ## Steps
 
-**1. Install the Tigera operator + Calico CRDs** from `k8s-bastion` (`kubectl` and kubeconfig were installed in the bootstrap section). Check [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases) for the current tag before running — pin it, don't track `master`:
+**1. Calico operator** — from `k8s-bastion`. Pin the tag. Do not track `master`.
 ```sh
-CALICO_DEPLOY_VERSION=v3.31.7   # checked 2026-09: one minor behind current stable v3.32.x — reverify at the releases page above
+CALICO_DEPLOY_VERSION=v3.31.7   # one minor behind current stable; recheck the Calico releases page
 kubectl create -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_DEPLOY_VERSION}/manifests/tigera-operator.yaml"
 ```
 
-**2. Apply the Calico custom resources**, with the pod CIDR matching `kubeadm init`:
+**2. Calico custom resources** — the pod CIDR must match `kubeadm init`.
 ```sh
 curl -fsSL -o custom-resources.yaml \
   "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_DEPLOY_VERSION}/manifests/custom-resources.yaml"
-grep -A1 'cidr:' custom-resources.yaml   # confirm it reads 192.168.0.0/16 (default) before applying — edit it first if you used a different pod CIDR in the bootstrap
+grep -A1 'cidr:' custom-resources.yaml          # must be 192.168.0.0/16 before you apply
 kubectl create -f custom-resources.yaml
-```
-
-**3. Verify:**
-```sh
-kubectl get pods -n calico-system -w
-kubectl get nodes    # all should flip to Ready once Calico pods are Running
+kubectl get pods -n calico-system               # calico-node pods become Running
+kubectl get nodes                               # every node flips to Ready
 ```
 
 

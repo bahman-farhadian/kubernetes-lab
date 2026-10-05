@@ -12,27 +12,25 @@ Distro apt only ever carries one Ceph release per OS release, which leaves nothi
 
 Ceph stays on these three workers in every scenario. `k8s-work-4` is a GPU node only. Do not install Ceph there and do not give it an OSD.
 
-**1. Add Ceph's repo and install a pinned release** (all OSD nodes — check [docs.ceph.com/en/latest/releases](https://docs.ceph.com/en/latest/releases/) for current/supported releases before running, and see the Debian 13 caveat above):
+**1. Ceph packages on all three workers** — Ceph's own repo, one release behind current stable, then hold them.
 ```sh
-CEPH_DEPLOY_RELEASE=squid   # v19.x — current stable as of 2026-09 (19.2.6), scheduled EOL 2026-10-31; reverify at docs.ceph.com/en/latest/releases
+CEPH_DEPLOY_RELEASE=squid          # v19; recheck docs.ceph.com/en/latest/releases
 curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph.gpg
 echo "deb [signed-by=/usr/share/keyrings/ceph.gpg] https://download.ceph.com/debian-${CEPH_DEPLOY_RELEASE}/ $(lsb_release -sc) main" \
-  | sudo tee /etc/apt/sources.list.d/ceph.list
+  | sudo tee /etc/apt/sources.list.d/ceph.list     # suite comes from this VM's codename
 sudo apt update
-
-apt-cache madison ceph-common   # list exact available versions for this release — pick one; 19.2.6 was latest as of 2026-09
-CEPH_DEPLOY_VERSION="19.2.6-1~$(lsb_release -sc)"   # confirm this exact string against the madison output above
-
+apt-cache madison ceph-common                      # copy the exact version string
+CEPH_DEPLOY_VERSION="19.2.6-1~$(lsb_release -sc)"  # must match madison
 sudo apt install -y ceph-mon=${CEPH_DEPLOY_VERSION} ceph-mgr=${CEPH_DEPLOY_VERSION} \
   ceph-osd=${CEPH_DEPLOY_VERSION} ceph-common=${CEPH_DEPLOY_VERSION}
 sudo apt-mark hold ceph-mon ceph-mgr ceph-osd ceph-common
 ```
 Use the same `CEPH_DEPLOY_VERSION` on all three nodes.
 
-**2. Generate cluster identity + config** (once, e.g. on `k8s-work-1`):
+**2. Cluster identity** — once, on `k8s-work-1`. Copy the finished `ceph.conf` to the other two workers.
 ```sh
 FSID=$(uuidgen)
-echo "$FSID"   # save this — you'll need it again for Ceph-CSI's clusterID
+echo "$FSID"   # Ceph-CSI clusterID; keep it
 sudo tee /etc/ceph/ceph.conf <<EOF
 [global]
 fsid = ${FSID}
@@ -60,20 +58,20 @@ sudo monmaptool --create --fsid "$FSID" \
 ```
 Copy `/tmp/ceph.mon.keyring`, `/tmp/monmap`, and `/etc/ceph/ceph.client.admin.keyring` to the same paths on `k8s-work-2`/`k8s-work-3`.
 
-**4. Bootstrap each mon** (all 3 mon nodes, same commands, substitute the local hostname):
+**4. Bootstrap each mon** — same commands on all three. Change the hostname to the local node.
 ```sh
-sudo -u ceph mkdir -p /var/lib/ceph/mon/ceph-k8s-work-1
+sudo -u ceph mkdir -p /var/lib/ceph/mon/ceph-k8s-work-1          # owned by ceph, not root
 sudo -u ceph ceph-mon --mkfs -i k8s-work-1 --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
-sudo systemctl enable --now ceph-mon@k8s-work-1
+sudo systemctl enable --now ceph-mon@k8s-work-1                 # start this mon
 ```
 
-**5. Bootstrap mgr** (all 3 mon nodes). Create the directory **before** writing the keyring — `-o` will not create parent dirs:
+**5. Bootstrap each mgr** — create the directory first. `ceph auth -o` will not create parent directories.
 ```sh
 sudo mkdir -p /var/lib/ceph/mgr/ceph-k8s-work-1
 sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1
 sudo ceph auth get-or-create mgr.k8s-work-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' \
   -o /var/lib/ceph/mgr/ceph-k8s-work-1/keyring
-sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1/keyring
+sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1/keyring     # daemon cannot read a root-owned key
 sudo systemctl enable --now ceph-mgr@k8s-work-1
 ```
 
@@ -86,33 +84,29 @@ sudo ceph auth get-or-create client.bootstrap-osd \
 ```
 Copy `/var/lib/ceph/bootstrap-osd/ceph.keyring` (and `/etc/ceph/ceph.conf` if not already there) to `k8s-work-2` and `k8s-work-3`.
 
-**7. Bring up the OSD** on each worker's dedicated Ceph disk (confirm the device name with `lsblk` first — don't assume `/dev/sdb`):
+**7. One OSD per worker** — check the device with `lsblk` first. Do not guess `/dev/sdb`.
 ```sh
-sudo apt install -y lvm2   # ceph-volume needs it
-sudo ceph-volume lvm create --data /dev/sdb
-```
-
-**8. Verify:**
-```sh
-sudo ceph -s   # expect 3 mons in quorum, 3 osds up/in
+sudo apt install -y lvm2                         # ceph-volume uses LVM
+sudo ceph-volume lvm create --data /dev/sdb      # wipe and claim this disk
+sudo ceph -s                                     # 3 mons in quorum, 3 osds up
 ```
 
 ## Steps — expose storage to Kubernetes via Ceph-CSI
 
-**9. Create a pool and a scoped client for CSI:**
+**9. Pool and CSI client** — the key printed here goes into the Kubernetes Secret.
 ```sh
 sudo ceph osd pool create kubernetes
 sudo rbd pool init kubernetes
 sudo ceph auth get-or-create client.kubernetes \
   mon 'profile rbd' osd 'profile rbd pool=kubernetes' mgr 'profile rbd pool=kubernetes' \
-  -o /etc/ceph/ceph.client.kubernetes.keyring
-sudo ceph auth print-key client.kubernetes   # save this key for the Secret below
+  -o /etc/ceph/ceph.client.kubernetes.keyring          # this client can only use this pool
+sudo ceph auth print-key client.kubernetes             # paste into the Secret in step 11
 ```
 
-**10. Pinned Ceph-CSI RBD chart** — run from `k8s-bastion`. Helm 3 is already installed there ([05-deploy-kubernetes.md](05-deploy-kubernetes.md)). Check [github.com/ceph/ceph-csi](https://github.com/ceph/ceph-csi) for the current chart version list:
+**10. Ceph-CSI chart** — from `k8s-bastion`. Helm is already there. Pin the chart version.
 ```sh
 helm repo add ceph-csi https://ceph.github.io/csi-charts && helm repo update
-helm search repo ceph-csi/ceph-csi-rbd --versions | head   # pick an exact chart version
+helm search repo ceph-csi/ceph-csi-rbd --versions | head   # copy one chart version
 CEPH_CSI_CHART_VERSION="<version from the list above>"
 kubectl create namespace ceph-csi-rbd
 helm install ceph-csi-rbd ceph-csi/ceph-csi-rbd -n ceph-csi-rbd --version "${CEPH_CSI_CHART_VERSION}" \

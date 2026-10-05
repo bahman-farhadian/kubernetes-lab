@@ -10,26 +10,25 @@ Compose on the bastion: change the image tag in **that app's** file only (`/opt/
 
 Deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Upgrading one minor at a time, in this order: **first control-plane node → remaining control-plane nodes → workers** — never skip a minor, per [kubeadm's version skew policy](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-upgrade/). External etcd's apiserver is stateless, but `kubeadm upgrade` still walks the same control-plane component set on each node.
 
-**1. Point at the new minor's repo and pick a pinned patch** (on `k8s-ctrl-1` first):
+**1. New minor repo** — on `k8s-ctrl-1` first. One minor up. Do not skip.
 ```sh
-KUBE_UPGRADE_MINOR=v1.37   # exactly one minor above KUBE_DEPLOY_MINOR — never skip a minor. v1.37 was current stable as of 2026-09; reverify at kubernetes.io/releases since a new minor lands roughly every 4 months
+KUBE_UPGRADE_MINOR=v1.37          # exactly one minor above the deployed minor
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/Release.key" \
-  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg   # replace the old keyring file
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt update
-apt-cache madison kubeadm   # 1.37.0 was the only patch out as of 2026-09 (minor just released 2026-08-26)
-KUBE_UPGRADE_VERSION="1.37.0-1.1"   # confirm this exact string against the madison output above
+apt-cache madison kubeadm                            # copy the new pin
+KUBE_UPGRADE_VERSION="1.37.0-1.1"                    # must match madison
 ```
 
-**2. `k8s-ctrl-1`** — upgrade `kubeadm` first, apply the cluster upgrade, then `kubelet`/`kubectl`:
+**2. First control plane** — `kubeadm` first, then the apply, then kubelet and kubectl. Hold again before you leave the node.
 ```sh
 sudo apt-mark unhold kubeadm
 sudo apt install -y kubeadm=${KUBE_UPGRADE_VERSION}
-sudo apt-mark hold kubeadm
-sudo kubeadm upgrade plan
-sudo kubeadm upgrade apply v${KUBE_UPGRADE_VERSION%%-*}
-
+sudo apt-mark hold kubeadm                                          # hold before the long apply
+sudo kubeadm upgrade plan                                           # read this; do not skip it
+sudo kubeadm upgrade apply v${KUBE_UPGRADE_VERSION%%-*}             # only on the first control plane
 sudo apt-mark unhold kubelet kubectl
 sudo apt install -y kubelet=${KUBE_UPGRADE_VERSION} kubectl=${KUBE_UPGRADE_VERSION}
 sudo apt-mark hold kubelet kubectl
@@ -49,22 +48,20 @@ sudo apt-mark hold kubelet kubectl
 sudo systemctl daemon-reload && sudo systemctl restart kubelet
 ```
 
-**4. Each worker** — cordon and drain *first* (unlike control-plane nodes, workers run your actual pods):
+**4. Each worker** — drain first. Workers run pods. Do one worker at a time.
 ```sh
 kubectl cordon k8s-work-1
-kubectl drain k8s-work-1 --ignore-daemonsets --delete-emptydir-data
-
-# on k8s-work-1 itself:
+kubectl drain k8s-work-1 --ignore-daemonsets --delete-emptydir-data   # from the bastion
+# then on k8s-work-1:
 sudo apt-mark unhold kubeadm
 sudo apt install -y kubeadm=${KUBE_UPGRADE_VERSION}
 sudo apt-mark hold kubeadm
-sudo kubeadm upgrade node
+sudo kubeadm upgrade node                                              # not "upgrade apply"
 sudo apt-mark unhold kubelet
 sudo apt install -y kubelet=${KUBE_UPGRADE_VERSION}
 sudo apt-mark hold kubelet
 sudo systemctl daemon-reload && sudo systemctl restart kubelet
-
-kubectl uncordon k8s-work-1
+kubectl uncordon k8s-work-1                                            # from the bastion, after the node is back
 ```
 Repeat per worker, one at a time — never drain two simultaneously on a 3-node worker pool. GPU: include `k8s-work-4`.
 
@@ -77,22 +74,13 @@ kubectl get nodes -o wide   # every node on the new version, all Ready
 
 Deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Operator-based installs upgrade by re-applying a newer operator manifest — you don't re-apply `custom-resources.yaml`, since that could reset your pod-CIDR/config back to its defaults; the operator reconciles the rest on its own.
 
-**1. Check the target release's notes** for anything manual (rare within the same major, but check) at [github.com/projectcalico/calico/releases](https://github.com/projectcalico/calico/releases), then apply the new operator manifest:
+**1. New Calico operator** — read the release notes, then apply only the operator manifest. Do not re-apply `custom-resources.yaml`.
 ```sh
-CALICO_UPGRADE_VERSION=v3.32.2   # current stable as of 2026-09; reverify at the releases page above
+CALICO_UPGRADE_VERSION=v3.32.2   # recheck github.com/projectcalico/calico/releases
 kubectl apply -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_UPGRADE_VERSION}/manifests/tigera-operator.yaml"
-```
-
-**2. Watch the rollout:**
-```sh
-kubectl get tigerastatus                  # waits for Available=True again
-kubectl get pods -n calico-system -w      # calico-node/typha pods cycling one at a time
-```
-
-**3. Verify:**
-```sh
-kubectl get nodes -o wide   # stay Ready throughout — Calico upgrades shouldn't drop existing pod networking
-kubectl get tigerastatus -o yaml | grep -A2 "reason: Success"
+kubectl get tigerastatus                              # Available=True again
+kubectl get pods -n calico-system                     # pods roll one at a time
+kubectl get nodes -o wide                             # nodes stay Ready
 ```
 
 ## Steps — etcd cluster upgrade (external etcd only)
@@ -106,16 +94,15 @@ apt-cache madison etcd-server
 ETCD_UPGRADE_VERSION="<version from the list above>"
 ```
 
-**2. Upgrade one node at a time, verifying quorum before moving to the next:**
+**2. One etcd node at a time** — quorum must be healthy before the next node.
 ```sh
 sudo apt-mark unhold etcd-server etcd-client
 sudo apt install -y etcd-server=${ETCD_UPGRADE_VERSION} etcd-client=${ETCD_UPGRADE_VERSION}
 sudo apt-mark hold etcd-server etcd-client
 sudo systemctl restart etcd
-
 etcdctl --endpoints=https://10.0.1.15:2379,https://10.0.1.16:2379,https://10.0.1.17:2379 \
   --cacert=/etc/etcd/pki/ca.pem --cert=/etc/etcd/pki/k8s-etcd-1.pem --key=/etc/etcd/pki/k8s-etcd-1-key.pem \
-  endpoint health --cluster
+  endpoint health --cluster                          # all three healthy before you continue
 ```
 Repeat on `k8s-etcd-2`, then `k8s-etcd-3`. A mixed-version quorum mid-rollout is expected and safe.
 
