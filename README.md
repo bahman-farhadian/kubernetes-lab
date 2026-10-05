@@ -54,8 +54,8 @@ Four scenarios on the 128 GB server, never at the same time (they reuse the same
 |---|---|---|
 | **Stacked** | 11 | 106 GB. Deploy this first. |
 | **Stacked + GPU** | 12 | 122 GB. `k8s-work-4` is 16 GB. [14-gpu.md](14-gpu.md). |
-| **External etcd** | 13 | 104 GB. |
-| **External etcd + GPU** | 14 | 120 GB. |
+| **External etcd** | 13 | 110 GB. Three 4 GB etcd nodes, so this costs more RAM than stacked. |
+| **External etcd + GPU** | 14 | 126 GB. |
 
 Each row is under 128 GB. They are not added together.
 

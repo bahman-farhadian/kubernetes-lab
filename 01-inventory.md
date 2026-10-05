@@ -8,7 +8,7 @@
 
 The cluster runs on the server: **128 GB RAM**. The 32 GB machine is not a deploy target. Only one cluster is powered on at a time, so the four scenarios do not add together. Debian 13 first, then Ubuntu 26, on that same server, still one at a time.
 
-Guest RAM stays under 128 GB in every scenario so the hypervisor has memory left. The sizes below are different on purpose. Stacked with the GPU worker is the largest, at 122 GB.
+Guest RAM stays under 128 GB in every scenario so the hypervisor has memory left. Stacked keeps etcd inside three 8 GB control planes (24 GB for that tier). External moves etcd onto three 4 GB VMs and keeps two 8 GB apiservers (28 GB for that tier). More machines, more RAM. External plus the GPU worker is the largest, at 126 GB.
 
 Rollout: [README.md](README.md#rollout-plan).
 
@@ -131,7 +131,7 @@ Same eleven VMs. `k8s-work-4` is 16 GB, not 24 GB. At 24 GB this scenario was 13
 | 12 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | 200 GB |
 | | **VM TOTALS (12 VMs)** | | | **28** | **122 GB** | **270 GB** | **800 GB** |
 
-122 GB leaves 6 GB on the host. That is the tightest scenario. Driver and device plugin: [14-gpu.md](14-gpu.md).
+122 GB leaves 6 GB on the host. Driver and device plugin: [14-gpu.md](14-gpu.md).
 
 ## 3. External etcd
 
@@ -146,15 +146,15 @@ Control plane drops to 2 nodes. etcd moves to 3 smaller VMs. Apiserver is statel
 | 05 | k8s-bastion | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11 | 2 | 4 GB | 40 GB | - |
 | 06 | k8s-ctrl-1 | Control Plane | 10.0.1.12 | 2 | 8 GB | 30 GB | - |
 | 07 | k8s-ctrl-2 | Control Plane | 10.0.1.13 | 2 | 8 GB | 30 GB | - |
-| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 2 GB | 10 GB | - |
-| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 2 GB | 10 GB | - |
-| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 2 GB | 10 GB | - |
+| 08 | k8s-etcd-1 | etcd | 10.0.1.15 | 1 | 4 GB | 20 GB | - |
+| 09 | k8s-etcd-2 | etcd | 10.0.1.16 | 1 | 4 GB | 20 GB | - |
+| 10 | k8s-etcd-3 | etcd | 10.0.1.17 | 1 | 4 GB | 20 GB | - |
 | 11 | k8s-work-1 | Worker / Storage | 10.0.1.21 | 4 | 24 GB | 20 GB | 200 GB |
 | 12 | k8s-work-2 | Worker / Storage | 10.0.1.22 | 4 | 24 GB | 20 GB | 200 GB |
 | 13 | k8s-work-3 | Worker / Storage | 10.0.1.23 | 4 | 24 GB | 20 GB | 200 GB |
-| | **VM TOTALS (13 VMs)** | | | **27** | **104 GB** | **250 GB** | **600 GB** |
+| | **VM TOTALS (13 VMs)** | | | **27** | **110 GB** | **280 GB** | **600 GB** |
 
-104 GB leaves 24 GB on the host.
+110 GB leaves 18 GB on the host. The etcd tier is 3 × 4 GB. That is more RAM than the etcd slice inside the three stacked control planes, which is why this scenario costs more than stacked even though two apiservers replace three.
 
 ## 4. External etcd + GPU
 
@@ -163,9 +163,9 @@ Same as scenario 3, plus the same 16 GB GPU worker.
 | # | VM Name | Role | LAN IP (example) | vCPU | RAM | Root Disk | Ceph OSD |
 |---|---|---|---|---|---|---|---|
 | 14 | k8s-work-4 | Worker / GPU | 10.0.1.24 | 2 | 16 GB | 20 GB | 200 GB |
-| | **VM TOTALS (14 VMs)** | | | **29** | **120 GB** | **270 GB** | **800 GB** |
+| | **VM TOTALS (14 VMs)** | | | **29** | **126 GB** | **300 GB** | **800 GB** |
 
-120 GB leaves 8 GB on the host. A 24 GB GPU worker here would land on 128 GB with nothing left for the hypervisor.
+126 GB leaves 2 GB on the host. That is the tightest scenario. Do not raise the GPU worker back to 24 GB: this total would pass 128 GB.
 
 ## Prerequisites
 - [00-overview.md](00-overview.md)
