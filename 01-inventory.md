@@ -28,7 +28,7 @@ A single host cannot provide redundancy or failover. There is no second server t
 
 The host can still provide fault tolerance for a VM, while the host itself stays up. One firewall VM can die and the other keeps the gateway. One API proxy can die and the other keeps `10.0.1.10`. One control plane or one etcd member can die and the cluster still has quorum. One storage worker can die and Ceph still has two OSDs and two monitors. That is tolerance of a guest failure, not failover of the server.
 
-Guest vCPU stays under 22 on every scenario, so the host keeps threads of its own. A 50% CPU share would allow up to 44 vCPUs. This lab does not use that. Guest RAM is planned in GB and must be read against 125 GiB usable, with no swap. 126 GB of guests does not fit. The 200 GB Ceph disks are on `k8s-work-1/2/3` only. They are files or volumes on these SSDs, not a fourth disk in this table. The GPU VM has no OSD.
+Guest vCPU stays under 22 on every scenario. The threads above that number stay on the KVM host and are how this server keeps running: the OS, KVM, and the disks. They are not idle spare, and the server is not left without CPU. A 50% CPU share would allow up to 44 guest vCPUs. This lab does not use that. Guest RAM is planned in GB and must be read against 125 GiB usable, with no swap. 126 GB of guests does not fit. The 200 GB Ceph disks are on `k8s-work-1/2/3` only. They are files or volumes on these SSDs, not a fourth disk in this table. The GPU VM has no OSD.
 
 Rollout: [README.md](README.md#rollout-plan).
 
@@ -153,12 +153,12 @@ VM root disks are image files on the two 192G volumes together (`/data-root` and
 
 | Scenario | vCPU of 24 | RAM of 125 GiB | Root disks on 384G | Ceph disks on 888G |
 |---|---|---|---|---|
-| 1. Stacked | 17, 7 threads left | 106 GB, 19 GiB left | 250 GB, fits | 600 GB, fits |
-| 2. Stacked + GPU | 18, 6 threads left | 122 GB, 3 GiB left | 270 GB, fits | 600 GB, fits |
-| 3. External etcd | 18, 6 threads left | 110 GB, 15 GiB left | 280 GB, fits | 600 GB, fits |
-| 4. External etcd + GPU | 19, 5 threads left | 126 GB, over by about 1 GiB | 300 GB, fits | 600 GB, fits |
+| 1. Stacked | 17, host keeps 7 | 106 GB, 19 GiB left | 250 GB, fits | 600 GB, fits |
+| 2. Stacked + GPU | 18, host keeps 6 | 122 GB, 3 GiB left | 270 GB, fits | 600 GB, fits |
+| 3. External etcd | 18, host keeps 6 | 110 GB, 15 GiB left | 280 GB, fits | 600 GB, fits |
+| 4. External etcd + GPU | 19, host keeps 5 | 126 GB, over by about 1 GiB | 300 GB, fits | 600 GB, fits |
 
-Scenario 2's 3 GiB is what KVM itself needs for twelve VMs, so that row has no spare RAM. Scenario 4 does not fit in memory. Guest vCPU stays under 22, so the host keeps at least 5 threads. Putting root disks and Ceph disks on the 888G volume together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why they are split across the disks above.
+Scenario 2's 3 GiB is what KVM itself needs for twelve VMs, so that row has no spare RAM. Scenario 4 does not fit in memory. The threads the guests do not get stay with the server so it can keep running. Putting root disks and Ceph disks on the 888G volume together does not fit scenarios 2 and 4 (870G and 900G against 888G), which is why they are split across the disks above.
 
 ## 1. Stacked etcd
 
