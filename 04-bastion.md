@@ -100,7 +100,7 @@ First start can take a minute. Change the admin password in the UI (`http://k8s-
 
 ## Steps — `/opt/prometheus`
 
-`/opt/prometheus/prometheus.yml` scrapes every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15` `.16` `.17`. GPU: add `.24`. Targets stay `DOWN` until [08-observability.md](08-observability.md) installs `node_exporter`. Write both files, then `compose up` loads them.
+`/opt/prometheus/prometheus.yml` scrapes every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15` `.16` `.17`. GPU: add `.24`. Ceph VMs `.25` `.26` `.27` are already in the list. Targets stay `DOWN` until [08-observability.md](08-observability.md) installs `node_exporter`. Write both files, then `compose up` loads them.
 ```sh
 ls -l /opt/prometheus/prometheus.yml /opt/prometheus/compose.yaml 2>/dev/null || true
 sudo tee /opt/prometheus/prometheus.yml <<'EOF'
@@ -121,6 +121,9 @@ scrape_configs:
           - 10.0.1.21:9100
           - 10.0.1.22:9100
           - 10.0.1.23:9100
+          - 10.0.1.25:9100
+          - 10.0.1.26:9100
+          - 10.0.1.27:9100
 EOF
 sudo tee /opt/prometheus/compose.yaml <<'EOF'
 services:

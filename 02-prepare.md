@@ -56,8 +56,11 @@ sudo tee -a /etc/hosts <<'EOF'
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
+10.0.1.25   k8s-ceph-1
+10.0.1.26   k8s-ceph-2
+10.0.1.27   k8s-ceph-3
 EOF
-getent hosts k8s-fw-vip k8s-apiserver                   # the file answers; no extra reload
+getent hosts k8s-fw-vip k8s-apiserver k8s-ceph-1       # the file answers; no extra reload
 ```
 
 External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
@@ -78,8 +81,11 @@ sudo tee -a /etc/hosts <<'EOF'
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
+10.0.1.25   k8s-ceph-1
+10.0.1.26   k8s-ceph-2
+10.0.1.27   k8s-ceph-3
 EOF
-getent hosts k8s-fw-vip k8s-apiserver k8s-etcd-1
+getent hosts k8s-fw-vip k8s-apiserver k8s-etcd-1 k8s-ceph-1
 ```
 
 There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
@@ -95,7 +101,7 @@ swapon --show                                          # must stay empty
 
 **2b. Leave the install-time default route in place.** Step 6 needs outbound apt, and the LAN VIP (`10.0.1.254`) does not exist until keepalived is up in [03-firewall.md](03-firewall.md). Pointing the default route at it here black-holes that apt run. Step 06 replaces the temporary gateway after the VIP answers.
 
-**3. Kernel modules and sysctl** — control planes and workers only. Skip firewalls, the API proxies, the bastion, and etcd-only nodes. Read the live values, write the boot files, then load those files. Do not use `sysctl -w` or a bare `modprobe` as the change.
+**3. Kernel modules and sysctl** — control planes and workers only. Skip firewalls, the API proxies, the bastion, the etcd-only nodes, and the Ceph VMs. Read the live values, write the boot files, then load those files. Do not use `sysctl -w` or a bare `modprobe` as the change.
 ```sh
 lsmod | grep -E '^(overlay|br_netfilter)' || true
 sysctl -n net.ipv4.ip_forward
