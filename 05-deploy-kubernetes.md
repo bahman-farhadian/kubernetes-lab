@@ -1,6 +1,6 @@
 # 05. Deploy Kubernetes
 
-**Goal:** Container runtime on the Kubernetes nodes, a two-node API load balancer, then one control-plane bootstrap (stacked **or** external), worker join, and Calico. `kubectl` and Helm land on the bastion at the end of the bootstrap you opened.
+**Goal:** Container runtime on the Kubernetes nodes, a two-node API load balancer, then one control-plane bootstrap (stacked **or** external), worker join, and Calico. `kubectl`, k9s, and Helm land on the bastion at the end of the bootstrap you opened.
 
 Open **one** bootstrap section. Stacked is the current pass.
 
@@ -24,14 +24,16 @@ containerd --version                                                  # kubeadm 
 ```
 If that version is too old for the Kubernetes minor below, use Docker's `containerd.io` repo instead. Check [download.docker.com](https://download.docker.com) for Debian 13 or Ubuntu 26.
 
-**2. systemd cgroup driver** — kubelet uses systemd, so containerd must too. Mirrors, if you use them, are [04-bastion.md](04-bastion.md) step 5 and go in before the restart.
+**2. systemd cgroup driver** — kubelet uses systemd, so containerd must too. Read any file already on disk, write `/etc/containerd/config.toml`, then restart so the running daemon loads it. Apt has usually started containerd already; `enable --now` does not reload it. No registry mirror is installed in this manual. If you add one later, it is another file under that config, written before this restart. See [04-bastion.md](04-bastion.md).
 ```sh
 sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml      # package default can disable CRI
-grep -n SystemdCgroup /etc/containerd/config.toml                     # read it before changing it
+grep -n SystemdCgroup /etc/containerd/config.toml 2>/dev/null || true  # read before replace
+containerd config default | sudo tee /etc/containerd/config.toml       # package default can disable CRI
+grep -n SystemdCgroup /etc/containerd/config.toml
 sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-grep -n SystemdCgroup /etc/containerd/config.toml                     # the file is what survives reboot
-sudo systemctl enable --now containerd                                # start from that file
+grep -n SystemdCgroup /etc/containerd/config.toml                      # the file is what survives reboot
+sudo systemctl enable --now containerd
+sudo systemctl restart containerd                                     # the daemon reads that file
 sudo ctr version                                                       # client can talk to the daemon
 ls -l /run/containerd/containerd.sock                                  # kubeadm uses this socket
 ```
@@ -70,76 +72,94 @@ sudo apt install -y keepalived=${KEEPALIVED_VERSION} haproxy=${HAPROXY_VERSION}
 sudo apt-mark hold keepalived haproxy
 ```
 
-**3. keepalived** — `/etc/keepalived/keepalived.conf` on `k8s-lb-1`. `auth_pass` is local only (8 characters; keepalived truncates). Do not commit it.
-
-```
+**3. keepalived** — both nodes. Read the package sample, replace `/etc/keepalived/keepalived.conf`, test it, then restart. `k8s-lb-1` is MASTER / priority 100. `k8s-lb-2` is BACKUP / priority 90. `auth_pass` is local only (8 characters; keepalived truncates). Do not commit it. `API_VRID` must differ from the firewall LAN VRID.
+```sh
+LAN_IF=eth0                                         # NIC on 10.0.1.0/24
+API_VRID=61                                         # must differ from the firewall LAN VRID
+STATE=MASTER                                        # BACKUP on k8s-lb-2
+PRIORITY=100                                        # 90 on k8s-lb-2
+AUTH_PASS="<8 characters, local only>"
+sudo grep -n . /etc/keepalived/keepalived.conf || true
+sudo tee /etc/keepalived/keepalived.conf <<EOF
 vrrp_instance API {
-    state MASTER
+    state ${STATE}
     interface ${LAN_IF}
     virtual_router_id ${API_VRID}
-    priority 100
+    priority ${PRIORITY}
     advert_int 1
     authentication {
         auth_type PASS
-        auth_pass <local-only>
+        auth_pass ${AUTH_PASS}
     }
     virtual_ipaddress {
         10.0.1.10/24
     }
 }
-```
-
-On `k8s-lb-2`: `state BACKUP` and `priority 90`. Then:
-
-```sh
+EOF
+sudo keepalived -t                                  # exit 0, or do not start it
 sudo systemctl enable --now keepalived
-ip -br addr show    # MASTER shows 10.0.1.10; BACKUP does not
+sudo systemctl restart keepalived                   # the running process reads the file
+ip -br addr show                                    # MASTER shows 10.0.1.10; BACKUP does not
 ```
 
-**4. HAProxy** — same `/etc/haproxy/haproxy.cfg` snippet on both nodes. `ip_nonlocal_bind` is why the backup can bind an address it does not hold.
+**4. HAProxy** — same file on both nodes. Read the package `/etc/haproxy/haproxy.cfg` first. If it has a sample `bind *:80`, comment that frontend and its backend in the file: `*:80` already covers the VIP, and [07-ingress.md](07-ingress.md) binds `10.0.1.10:80` later. Keep the package `global` and `defaults`. Append one frontend. The `timeout` lines are longer than a typical package default so an API watch is not cut at 50 seconds. Skip the append if `k8s-apiserver` is already in the file. `ip_nonlocal_bind` is why the backup can bind an address it does not hold.
 
 Stacked etcd — three apiserver backends:
+```sh
+grep -n -E 'bind |^frontend|^backend' /etc/haproxy/haproxy.cfg
+sudo tee -a /etc/haproxy/haproxy.cfg <<'EOF'
 
-```
 frontend k8s-apiserver
     bind 10.0.1.10:6443
     mode tcp
     option tcplog
+    timeout client 1h
     default_backend k8s-apiserver-backend
 
 backend k8s-apiserver-backend
     mode tcp
     option tcp-check
     balance roundrobin
+    timeout server 1h
+    timeout check 5s
     server k8s-ctrl-1 10.0.1.12:6443 check fall 3 rise 2
     server k8s-ctrl-2 10.0.1.13:6443 check fall 3 rise 2
     server k8s-ctrl-3 10.0.1.14:6443 check fall 3 rise 2
+EOF
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg          # stop if this fails
+sudo systemctl enable --now haproxy
+sudo systemctl restart haproxy                      # the process reads the file
+nc -zv 10.0.1.10 6443
 ```
 
-External etcd — two apiserver backends (no `k8s-ctrl-3`):
+External etcd — same file, two backends, no `k8s-ctrl-3`. Run this instead of the stacked append:
+```sh
+grep -n -E 'bind |^frontend|^backend' /etc/haproxy/haproxy.cfg
+sudo tee -a /etc/haproxy/haproxy.cfg <<'EOF'
 
-```
 frontend k8s-apiserver
     bind 10.0.1.10:6443
     mode tcp
     option tcplog
+    timeout client 1h
     default_backend k8s-apiserver-backend
 
 backend k8s-apiserver-backend
     mode tcp
     option tcp-check
     balance roundrobin
+    timeout server 1h
+    timeout check 5s
     server k8s-ctrl-1 10.0.1.12:6443 check fall 3 rise 2
     server k8s-ctrl-2 10.0.1.13:6443 check fall 3 rise 2
-```
-
-```sh
+EOF
 sudo haproxy -c -f /etc/haproxy/haproxy.cfg
 sudo systemctl enable --now haproxy
+sudo systemctl restart haproxy
 nc -zv 10.0.1.10 6443
 ```
 
-`nc -zv` should succeed: HAProxy is listening on the VIP while every backend is still down. Connection refused means keepalived does not hold `.10` on either node, or HAProxy did not start. Backend servers show `DOWN` until the apiservers exist. That is expected.
+`nc -zv` should succeed: HAProxy is listening on the VIP while every backend is still down. Connection refused means keepalived does not hold `.10` on either node, or HAProxy did not start. Backend servers show `DOWN` until the apiservers exist. That is expected. The bastion reaches this VIP on the LAN. Any other host reaches it only through the site VPN and the firewall pair. That VPN server is not part of this repo.
 
 Failover: `sudo systemctl stop keepalived` on MASTER. `.10` appears on BACKUP within a couple of seconds and `nc` still succeeds. Start keepalived on MASTER again afterward.
 
@@ -173,8 +193,10 @@ KUBE_DEPLOY_MINOR=v1.36   # one behind current stable; recheck kubernetes.io/rel
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg   # pkgs.k8s.io signing key
+cat /etc/apt/sources.list.d/kubernetes.list 2>/dev/null || true   # read before replace
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 apt-cache madison kubeadm                                    # copy the exact package string
 KUBE_DEPLOY_VERSION="1.36.4-1.1"                             # must match madison, including the -1.1 suffix
@@ -214,15 +236,17 @@ kubectl --kubeconfig $HOME/.kube/config -n kube-system exec etcd-k8s-ctrl-1 -- e
 ```
 Same thing as `sudo kubectl --kubeconfig /etc/kubernetes/admin.conf ...`. Expect 3 members, all `started`. Nodes stay `NotReady` until the Calico section below — expected at this point.
 
-**5. `kubectl` and Helm on the bastion** — admin host only. Do not install `kubelet` or `kubeadm` here. Debian's package named `helm` is Emacs, so Helm 3 comes from the upstream tarball (`v3.22.0`; Helm 4 exists, this lab stays on 3).
+**5. `kubectl`, k9s, and Helm on the bastion** — admin host only. Do not install `kubelet` or `kubeadm` here. Debian's package named `helm` is Emacs, so Helm 3 comes from the upstream tarball (`v3.22.0`; Helm 4 exists, this lab stays on 3). k9s is the same kind of install: a pinned GitHub tarball, not a distro package.
 ```sh
 KUBE_DEPLOY_MINOR=v1.36            # same minor as step 1
 KUBE_DEPLOY_VERSION="1.36.4-1.1"   # same pin as step 1
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+cat /etc/apt/sources.list.d/kubernetes.list 2>/dev/null || true   # read before replace
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}          # kubectl only
 sudo apt-mark hold kubectl
@@ -231,30 +255,66 @@ curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp
 tar -xzf /tmp/helm.tgz -C /tmp
 sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
 helm version
+K9S_VERSION=v0.51.0                                      # recheck github.com/derailed/k9s/releases
+curl -fsSL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" -o /tmp/k9s.tgz
+tar -tzf /tmp/k9s.tgz                                    # the archive contains the k9s binary
+tar -xzf /tmp/k9s.tgz -C /tmp
+sudo install -m 0755 /tmp/k9s /usr/local/bin/k9s
+k9s version
+K9S_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/k9s/config.yaml"
+mkdir -p "$(dirname "$K9S_CFG")"
+if [ -f "$K9S_CFG" ]; then
+  grep -n logoless "$K9S_CFG" || true                  # read before changing the existing file
+  grep -q 'logoless:' "$K9S_CFG" && sed -i 's/logoless: false/logoless: true/' "$K9S_CFG"
+else
+  cat > "$K9S_CFG" <<'EOF'
+k9s:
+  refreshRate: 2
+  ui:
+    logoless: true
+  thresholds:
+    cpu:
+      critical: 90
+      warn: 70
+    memory:
+      critical: 90
+      warn: 70
+EOF
+fi
+grep -n logoless "$K9S_CFG"                            # true; k9s reads this file on start
 ```
+`logoless: true` hides the k9s name in the top bar. The bar itself stays. `k9s --logoless` does that for one run only, so it is not the change. If the file already existed and `grep` showed no `logoless` line, add `logoless: true` under its `ui:` block and grep again. `thresholds` is in the new file because k9s has crashed on a config that omitted it.
 
-**6. Copy the kubeconfig to the bastion** — the bastion has no SSH key to `k8s-ctrl-1`, so the workstation copies it.
+**6. Configure `kubectl` on the bastion** — install was step 5. The bastion has no SSH key to `k8s-ctrl-1`, so the workstation copies the kubeconfig. The bastion is on the LAN, so `server` stays `https://10.0.1.10:6443`. It does not use the VPN. k9s uses this same file.
 ```sh
 scp <user>@<k8s-ctrl-1-ip>:.kube/config /tmp/k8s-admin.conf          # from the workstation
 ssh <user>@<k8s-bastion-ip> 'mkdir -p ~/.kube && chmod 700 ~/.kube'
 scp /tmp/k8s-admin.conf <user>@<k8s-bastion-ip>:.kube/config
 rm -f /tmp/k8s-admin.conf
-ssh <user>@<k8s-bastion-ip> 'chmod 600 ~/.kube/config && kubectl get nodes'   # NotReady until Calico
 ```
+```sh
+# on k8s-bastion
+ls -l ~/.kube/config
+chmod 600 ~/.kube/config
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo   # https://10.0.1.10:6443
+kubectl get nodes                                                                # NotReady until Calico
+```
+`k9s` with no arguments reads that kubeconfig. The top bar stays, without the k9s logo.
+
 If the bastion can already SSH to `k8s-ctrl-1`, `scp k8s-ctrl-1:.kube/config ~/.kube/config` there replaces the workstation hop.
 
-On your workstation (outside the lab's VMs entirely):
-1. Copy the same kubeconfig down through the bastion, e.g. `scp k8s-bastion:.kube/config ~/.kube/config`.
-2. Install `kubectl` locally, matching `KUBE_DEPLOY_MINOR` (client skew of ±1 minor from the server is fine, but staying aligned means you never have to think about it):
-   - Linux: `curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBE_DEPLOY_VERSION%%-*}/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/`
-   - macOS: `brew install kubectl`, or the same `curl` pattern with `darwin/amd64`/`darwin/arm64`
-   - Windows: see [kubernetes.io/docs/tasks/tools/install-kubectl-windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/)
-3. The apiserver VIP (`10.0.1.10:6443`) is only reachable from inside `10.0.1.0/24` — tunnel through the bastion rather than pointing the kubeconfig at an address your workstation can't route to:
-   ```sh
-   ssh -N -L 6443:10.0.1.10:6443 <user>@<bastion-reachable-address> &
-   ```
-   Then edit the kubeconfig's `server:` line to `https://127.0.0.1:6443`. kubeadm's default apiserver certificate includes `localhost`/`127.0.0.1` as SANs, so this works without regenerating certs — verify if you want to be sure: `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text | grep -A1 "Subject Alternative Name"` on `k8s-ctrl-1`.
-4. Verify: `kubectl get nodes` from your workstation, through the tunnel.
+**7. `kubectl` and k9s on any other host** — same clients, same kubeconfig, same `server: https://10.0.1.10:6443`. This host is not on the cluster LAN. Its path to that address is the site VPN, and the VPN enters through the firewall pair. The VPN server is outside this repo. Do not publish `:6443` on the WAN VIP. Do not SSH-forward the API and do not change `server` to `127.0.0.1`.
+```sh
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo   # still https://10.0.1.10:6443
+ip route get 10.0.1.10                                                           # must leave via the VPN, then the firewall
+kubectl get nodes
+```
+Install `kubectl` at the same minor if this host does not have it yet. A client one minor off the server is allowed; matching the pin avoids that question.
+- Linux: `curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBE_DEPLOY_VERSION%%-*}/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/`
+- macOS: `brew install kubectl`, or the same `curl` pattern with `darwin/amd64` / `darwin/arm64`
+- Windows: [kubernetes.io/docs/tasks/tools/install-kubectl-windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/)
+
+Install k9s at the same `v0.51.0` pin and write the same `logoless: true` file from step 5. Linux uses `k9s_Linux_amd64.tar.gz`. macOS uses `k9s_Darwin_amd64.tar.gz` or `k9s_Darwin_arm64.tar.gz` from that same release. `k9s` then uses this host's kubeconfig over the VPN.
 
 ## Bootstrap sequence
 
@@ -335,46 +395,63 @@ openssl x509 -req -in apiserver-etcd-client.csr -CA ca.pem -CAkey ca-key.pem -CA
   -out apiserver-etcd-client.crt -days 825
 ```
 
-`scp` `/tmp/etcd-pki/` from `k8s-etcd-1` to the other etcd nodes and both control-plane nodes first. Then, on each etcd node, install that node's server cert (keys `chmod 600`, owned by `etcd`):
+`scp` `/tmp/etcd-pki/` from `k8s-etcd-1` to the other etcd nodes and both control-plane nodes first. Then, on each etcd node, check the cert and install it. Replace `k8s-etcd-N` with this node's name. The key stays mode `600`, owned by `etcd`. etcd reads these paths from `/etc/default/etcd` at start.
 ```sh
+openssl x509 -in /tmp/etcd-pki/k8s-etcd-N.pem -noout -text | grep -A1 "Subject Alternative Name"
+sudo ls -l /etc/etcd/pki 2>/dev/null || true
 sudo mkdir -p /etc/etcd/pki
 sudo cp /tmp/etcd-pki/ca.pem /etc/etcd/pki/ca.pem
 sudo cp /tmp/etcd-pki/k8s-etcd-N.pem /etc/etcd/pki/k8s-etcd-N.pem
 sudo cp /tmp/etcd-pki/k8s-etcd-N-key.pem /etc/etcd/pki/k8s-etcd-N-key.pem
 sudo chown -R etcd:etcd /etc/etcd/pki
 sudo chmod 600 /etc/etcd/pki/*-key.pem
+sudo ls -l /etc/etcd/pki                         # key is etcd:etcd, mode 600
 ```
 
 On **both** `k8s-ctrl-1` and `k8s-ctrl-2`, install the CA + apiserver client cert at the paths kubeadm expects ([HA with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)):
 ```sh
+openssl x509 -in /tmp/etcd-pki/apiserver-etcd-client.crt -noout -subject
+sudo ls -l /etc/kubernetes/pki/apiserver-etcd-client.key 2>/dev/null || true
 sudo mkdir -p /etc/kubernetes/pki/etcd
 sudo cp /tmp/etcd-pki/ca.pem /etc/kubernetes/pki/etcd/ca.crt
 sudo cp /tmp/etcd-pki/apiserver-etcd-client.crt /etc/kubernetes/pki/apiserver-etcd-client.crt
 sudo cp /tmp/etcd-pki/apiserver-etcd-client.key /etc/kubernetes/pki/apiserver-etcd-client.key
 sudo chmod 600 /etc/kubernetes/pki/apiserver-etcd-client.key
+sudo ls -l /etc/kubernetes/pki/apiserver-etcd-client.key /etc/kubernetes/pki/etcd/ca.crt
 ```
 Keep `ca-key.pem` only on `k8s-etcd-1` (or offline). You need it to mint replacement certs later, not on the control-plane nodes.
 
-**3. Configure each node** — `/etc/default/etcd` (or `/etc/etcd/etcd.conf.yml`, depending on the packaged unit), same pattern on all three, only the local name/IP changes:
-```
-ETCD_NAME=k8s-etcd-1
-ETCD_INITIAL_CLUSTER="k8s-etcd-1=https://10.0.1.15:2380,k8s-etcd-2=https://10.0.1.16:2380,k8s-etcd-3=https://10.0.1.17:2380"
+**3. Configure each node** — Debian's `etcd.service` loads `/etc/default/etcd` (`EnvironmentFile=-/etc/default/etcd`). Confirm that on this VM before writing. If the unit names a different file, write that file instead. Same pattern on all three; only the local name and IP change. Do not `export` these and start `etcd` from the shell. Change `k8s-etcd-1` / `10.0.1.15` to this node.
+```sh
+ETCD_NAME=k8s-etcd-1                              # k8s-etcd-2 / k8s-etcd-3 on the others
+ETCD_IP=10.0.1.15                                 # 10.0.1.16 / 10.0.1.17
+systemctl cat etcd | grep -n EnvironmentFile      # expect /etc/default/etcd
+cat /etc/default/etcd                             # package sample, read before replace
+sudo tee /etc/default/etcd <<EOF
+ETCD_NAME=${ETCD_NAME}
+ETCD_DATA_DIR=/var/lib/etcd/default
+ETCD_INITIAL_CLUSTER=k8s-etcd-1=https://10.0.1.15:2380,k8s-etcd-2=https://10.0.1.16:2380,k8s-etcd-3=https://10.0.1.17:2380
 ETCD_INITIAL_CLUSTER_STATE=new
 ETCD_INITIAL_CLUSTER_TOKEN=k8s-lab-etcd
-ETCD_LISTEN_PEER_URLS=https://10.0.1.15:2380
-ETCD_LISTEN_CLIENT_URLS=https://10.0.1.15:2379,https://127.0.0.1:2379
-ETCD_INITIAL_ADVERTISE_PEER_URLS=https://10.0.1.15:2380
-ETCD_ADVERTISE_CLIENT_URLS=https://10.0.1.15:2379
+ETCD_LISTEN_PEER_URLS=https://${ETCD_IP}:2380
+ETCD_LISTEN_CLIENT_URLS=https://${ETCD_IP}:2379,https://127.0.0.1:2379
+ETCD_INITIAL_ADVERTISE_PEER_URLS=https://${ETCD_IP}:2380
+ETCD_ADVERTISE_CLIENT_URLS=https://${ETCD_IP}:2379
 ETCD_TRUSTED_CA_FILE=/etc/etcd/pki/ca.pem
-ETCD_CERT_FILE=/etc/etcd/pki/k8s-etcd-1.pem
-ETCD_KEY_FILE=/etc/etcd/pki/k8s-etcd-1-key.pem
+ETCD_CERT_FILE=/etc/etcd/pki/${ETCD_NAME}.pem
+ETCD_KEY_FILE=/etc/etcd/pki/${ETCD_NAME}-key.pem
 ETCD_PEER_TRUSTED_CA_FILE=/etc/etcd/pki/ca.pem
-ETCD_PEER_CERT_FILE=/etc/etcd/pki/k8s-etcd-1.pem
-ETCD_PEER_KEY_FILE=/etc/etcd/pki/k8s-etcd-1-key.pem
+ETCD_PEER_CERT_FILE=/etc/etcd/pki/${ETCD_NAME}.pem
+ETCD_PEER_KEY_FILE=/etc/etcd/pki/${ETCD_NAME}-key.pem
 ETCD_CLIENT_CERT_AUTH=true
 ETCD_PEER_CLIENT_CERT_AUTH=true
+EOF
+grep -n ETCD_NAME /etc/default/etcd               # this node's name, not a copy of etcd-1
+sudo ls /var/lib/etcd/default 2>/dev/null || true # must be empty: state=new refuses an existing member
+sudo systemctl enable --now etcd
+sudo systemctl restart etcd                       # the unit reads /etc/default/etcd
 ```
-Then on all three: `sudo systemctl enable --now etcd`.
+`ETCD_DATA_DIR` matches the Debian unit default (`/var/lib/etcd/default`). The initial-cluster line is the same on all three nodes. If `ls` shows files, the package already started a standalone etcd. Delete that directory before this restart (`sudo rm -rf /var/lib/etcd/default`). Do that only on this first clustered boot.
 
 **4. Verify quorum** (from any etcd node):
 ```sh
@@ -390,8 +467,10 @@ KUBE_DEPLOY_MINOR=v1.36   # checked 2026-09: current stable is v1.37, so one beh
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+cat /etc/apt/sources.list.d/kubernetes.list 2>/dev/null || true   # read before replace
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 
 apt-cache madison kubeadm   # list exact available patch versions in this minor — pick one; 1.36.4 was latest as of 2026-09
@@ -406,6 +485,7 @@ Use the **same** `KUBE_DEPLOY_VERSION` on both control-plane nodes. The etcd CA 
 **6. `kubeadm init` on `k8s-ctrl-1`** — kubeadm has **no** `--external-etcd-*` CLI flags. External etcd is a `ClusterConfiguration` in a config file ([HA with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)). Do not mix `--config` with `--pod-network-cidr` / `--control-plane-endpoint`; those fields live in the YAML.
 
 ```sh
+ls -l /root/kubeadm-config.yaml 2>/dev/null || true          # read before replace
 cat <<EOF | sudo tee /root/kubeadm-config.yaml
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
@@ -432,7 +512,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 **7. On `k8s-ctrl-2`** — confirm `/etc/kubernetes/pki/etcd/ca.crt` and `/etc/kubernetes/pki/apiserver-etcd-client.{crt,key}` are already present (step 2), then run the `--control-plane` join command printed by step 6 (`--certificate-key` expires after 2 hours; regenerate on `k8s-ctrl-1` with `sudo kubeadm init phase upload-certs --upload-certs` if needed).
 
-**8. Install `kubectl` and Helm on `k8s-bastion`.** Same admin host as the stacked path. The API VIP belongs to `k8s-lb-1` / `k8s-lb-2`. Control-plane nodes keep the `kubectl` from step 5. Do not install `kubelet` or `kubeadm` here. Calico, Ceph-CSI, and Traefik run from here.
+**8. Install `kubectl`, k9s, and Helm on `k8s-bastion`.** Same admin host as the stacked path. The API VIP belongs to `k8s-lb-1` / `k8s-lb-2`. Control-plane nodes keep the `kubectl` from step 5. Do not install `kubelet` or `kubeadm` here. Calico, Ceph-CSI, and Traefik run from here.
 
 `kubectl` — same Kubernetes apt repo as the control-plane nodes (step 5; the bastion never ran that step):
 ```sh
@@ -441,8 +521,10 @@ KUBE_DEPLOY_VERSION="1.36.4-1.1"   # MUST match step 5
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+cat /etc/apt/sources.list.d/kubernetes.list 2>/dev/null || true   # read before replace
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 sudo apt install -y kubectl=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubectl
@@ -455,9 +537,37 @@ curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp
 tar -xzf /tmp/helm.tgz -C /tmp
 sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
 helm version
+K9S_VERSION=v0.51.0                                      # recheck github.com/derailed/k9s/releases
+curl -fsSL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" -o /tmp/k9s.tgz
+tar -tzf /tmp/k9s.tgz                                    # the archive contains the k9s binary
+tar -xzf /tmp/k9s.tgz -C /tmp
+sudo install -m 0755 /tmp/k9s /usr/local/bin/k9s
+k9s version
+K9S_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/k9s/config.yaml"
+mkdir -p "$(dirname "$K9S_CFG")"
+if [ -f "$K9S_CFG" ]; then
+  grep -n logoless "$K9S_CFG" || true                  # read before changing the existing file
+  grep -q 'logoless:' "$K9S_CFG" && sed -i 's/logoless: false/logoless: true/' "$K9S_CFG"
+else
+  cat > "$K9S_CFG" <<'EOF'
+k9s:
+  refreshRate: 2
+  ui:
+    logoless: true
+  thresholds:
+    cpu:
+      critical: 90
+      warn: 70
+    memory:
+      critical: 90
+      warn: 70
+EOF
+fi
+grep -n logoless "$K9S_CFG"                            # true; k9s reads this file on start
 ```
+`logoless: true` hides the k9s name in the top bar. The bar itself stays. `k9s --logoless` is one run only, so it is not the change. If the file already existed and `grep` showed no `logoless` line, add `logoless: true` under its `ui:` block and grep again. `thresholds` is in the new file because k9s has crashed on a config that omitted it.
 
-Kubeconfig — copy via the workstation. The bastion is not assumed to have an SSH key to `k8s-ctrl-1`:
+Kubeconfig — copy via the workstation. The bastion is not assumed to have an SSH key to `k8s-ctrl-1`. k9s uses this same file:
 
 ```sh
 # on the workstation
@@ -467,24 +577,28 @@ scp /tmp/k8s-admin.conf <user>@<k8s-bastion-ip>:.kube/config
 rm -f /tmp/k8s-admin.conf
 ```
 ```sh
-# on k8s-bastion
+# on k8s-bastion — this VM is on the LAN, so it does not use the VPN
+ls -l ~/.kube/config
 chmod 600 ~/.kube/config
-kubectl get nodes   # NotReady until Calico is expected
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo   # https://10.0.1.10:6443
+kubectl get nodes                                                                # NotReady until Calico
 ```
+`k9s` with no arguments reads that kubeconfig. The top bar stays, without the k9s logo.
+
 If the bastion can already SSH to `k8s-ctrl-1`, `scp k8s-ctrl-1:.kube/config ~/.kube/config` there replaces the workstation hop.
 
-On your workstation (outside the lab's VMs entirely):
-1. Copy the same kubeconfig down through the bastion, e.g. `scp k8s-bastion:.kube/config ~/.kube/config`.
-2. Install `kubectl` locally, matching `KUBE_DEPLOY_MINOR` (client skew of ±1 minor from the server is fine, but staying aligned means you never have to think about it):
-   - Linux: `curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBE_DEPLOY_VERSION%%-*}/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/`
-   - macOS: `brew install kubectl`, or the same `curl` pattern with `darwin/amd64`/`darwin/arm64`
-   - Windows: see [kubernetes.io/docs/tasks/tools/install-kubectl-windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/)
-3. The apiserver VIP (`10.0.1.10:6443`) is only reachable from inside `10.0.1.0/24` — tunnel through the bastion rather than pointing the kubeconfig at an address your workstation can't route to:
-   ```sh
-   ssh -N -L 6443:10.0.1.10:6443 <user>@<bastion-reachable-address> &
-   ```
-   Then edit the kubeconfig's `server:` line to `https://127.0.0.1:6443`. kubeadm's default apiserver certificate includes `localhost`/`127.0.0.1` as SANs, so this works without regenerating certs — verify if you want to be sure: `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text | grep -A1 "Subject Alternative Name"` on `k8s-ctrl-1`.
-4. Verify: `kubectl get nodes` from your workstation, through the tunnel.
+**9. `kubectl` and k9s on any other host** — same clients and the same `server: https://10.0.1.10:6443`. This host is not on the cluster LAN. Its path is the site VPN, and the VPN enters through the firewall pair. The VPN server is outside this repo. Do not publish `:6443` on the WAN VIP. Do not SSH-forward the API and do not change `server` to `127.0.0.1`.
+```sh
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'; echo   # still https://10.0.1.10:6443
+ip route get 10.0.1.10                                                           # must leave via the VPN, then the firewall
+kubectl get nodes
+```
+Install `kubectl` at the same minor if this host does not have it yet. A client one minor off the server is allowed; matching the pin avoids that question.
+- Linux: `curl -fsSL -o kubectl "https://dl.k8s.io/release/v${KUBE_DEPLOY_VERSION%%-*}/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/`
+- macOS: `brew install kubectl`, or the same `curl` pattern with `darwin/amd64` / `darwin/arm64`
+- Windows: [kubernetes.io/docs/tasks/tools/install-kubectl-windows](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/)
+
+Install k9s at the same `v0.51.0` pin and write the same `logoless: true` file from step 8. Linux uses `k9s_Linux_amd64.tar.gz`. macOS uses `k9s_Darwin_amd64.tar.gz` or `k9s_Darwin_arm64.tar.gz` from that same release. `k9s` then uses this host's kubeconfig over the VPN.
 
 ## Bootstrap sequence
 
@@ -530,8 +644,10 @@ KUBE_DEPLOY_VERSION="1.36.4-1.1"   # MUST match the bootstrap exactly — copy t
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+cat /etc/apt/sources.list.d/kubernetes.list 2>/dev/null || true   # read before replace
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_DEPLOY_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 sudo apt install -y kubelet=${KUBE_DEPLOY_VERSION} kubeadm=${KUBE_DEPLOY_VERSION}
 sudo apt-mark hold kubelet kubeadm

@@ -19,7 +19,7 @@ One numbered spine. Circle a profile × scenario in [01-inventory.md](01-invento
 | [02-prepare.md](02-prepare.md)                     | Prerequisites and OS baseline                                        |
 | [03-firewall.md](03-firewall.md)                   | Gateway keepalived pair                                              |
 | [04-bastion.md](04-bastion.md)                     | Docker Compose: Nexus, Prometheus, Grafana                           |
-| [05-deploy-kubernetes.md](05-deploy-kubernetes.md) | containerd, API HAProxy pair, bootstrap, join, Calico, kubectl, Helm |
+| [05-deploy-kubernetes.md](05-deploy-kubernetes.md) | containerd, API pair, bootstrap, join, Calico, kubectl, k9s          |
 | [06-ceph.md](06-ceph.md)                           | Ceph deploy                                                          |
 | [07-ingress.md](07-ingress.md)                     | Traefik, published on the API pair                                   |
 | [08-observability.md](08-observability.md)         | node_exporter                                                        |

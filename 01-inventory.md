@@ -40,7 +40,8 @@ LAN addresses here are **examples**. Use your own when you provision. Do not com
 
 - **Gateway:** `k8s-fw-1` / `k8s-fw-2`, keepalived only, LAN VIP `10.0.1.254`. Every node defaults through this address. No HAProxy here. [03-firewall.md](03-firewall.md).
 - **Load balancer:** `k8s-lb-1` / `k8s-lb-2`, keepalived + HAProxy, VIP `10.0.1.10`. Clients use it for the API (`:6443`) and, after ingress, for `:80`/`:443`. Own VRID, different from the firewall LAN VRID. Node-to-node traffic does not pass through this pair. [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
-- **Bastion** `10.0.1.11`: jump host, Nexus, Prometheus, Grafana, `kubectl`, Helm. One VM is normal for this role. No HAProxy and no VIP on it.
+- **Bastion** `10.0.1.11`: jump host, Nexus, Prometheus, Grafana, `kubectl`, k9s, Helm. One VM is normal for this role. No HAProxy and no VIP on it. It is on the LAN, so `kubectl` and k9s talk to `10.0.1.10:6443` directly. [05-deploy-kubernetes.md](05-deploy-kubernetes.md) installs both. k9s is set `logoless: true`.
+- **kubectl and k9s from any other host:** same API address, `https://10.0.1.10:6443`, and only after the site VPN is up. That path enters through the firewall pair. The VPN server is outside this repo. Do not publish `:6443` on the WAN, and do not SSH-tunnel the API.
 - **DNS:** static `/etc/hosts` on every node ([02-prepare.md](02-prepare.md)). No cluster DNS server for node names.
 - **Kubernetes ranges** (must not overlap the LAN): pod CIDR `192.168.0.0/16`, service CIDR `10.96.0.0/12`.
 - **Ports:** `6443` (apiserver, via the API VIP), `80`/`443` (ingress, same VIP, added in [07-ingress.md](07-ingress.md)), `8081`/`8082` (Nexus), `2379-2380` (etcd), `10250` (kubelet), `179`/`4789` (Calico), `9100` (node_exporter), `9090`/`3000` (Prometheus/Grafana on the bastion). VRRP is protocol 112, once for the firewall pair and once for the API pair.
@@ -50,8 +51,11 @@ LAN addresses here are **examples**. Use your own when you provision. Do not com
 flowchart LR
     Ext["Upstream / WAN"] --> WANVIP["WAN VIP"]:::bastion
     WANVIP --> FW["k8s-fw-1 / k8s-fw-2\ngateway only"]:::bastion
+    Other["kubectl / k9s\non another host"] --> VPN["site VPN\nnot in this repo"]:::bastion
+    VPN --> FW
     FW --> LAN["LAN"]:::worker
-    Client["kubectl / ingress"] --> LB["k8s-lb-1 / k8s-lb-2\nVIP :6443 :80 :443"]:::bastion
+    LAN --> LB["k8s-lb-1 / k8s-lb-2\nVIP :6443 :80 :443"]:::bastion
+    BAST["kubectl / k9s\non k8s-bastion"] --> LB
     LB --> CP["Control plane"]:::controlPlane
     LAN --> CP
     CP -.-> Etcd["etcd"]:::etcd
@@ -65,7 +69,7 @@ flowchart LR
     classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
 ```
 
-The bastion is on the LAN and is not drawn above: it is not on the gateway path or the API path.
+The bastion is an admin client of the API VIP. It is not a hop on the gateway path or the ingress path. Another host's `kubectl` or k9s is drawn through the site VPN and the firewall, then the LAN, then the API VIP.
 
 ### VMs and connections — stacked
 
@@ -106,6 +110,7 @@ flowchart TB
     API -->|"TCP 6443"| C1
     API -->|"TCP 6443"| C2
     API -->|"TCP 6443"| C3
+    BAST -->|"kubectl / k9s :6443"| API
 
     C1 <-->|"etcd"| C2
     C2 <-->|"etcd"| C3
@@ -123,7 +128,7 @@ flowchart TB
     classDef storage fill:#0d9488,stroke:#0f766e,color:#ffffff
 ```
 
-Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, and metrics only — no line to the API VIP. After ingress, the same `.10` VIP also accepts TCP 80 and 443 and HAProxy sends those to the workers.
+Every box except the two VIPs is a VM. Both firewalls have a WAN NIC and a LAN NIC. Every other VM has one LAN NIC on `10.0.1.0/24` and uses `.254` as its default gateway. `k8s-bastion` is on that LAN for SSH, Nexus, metrics, and `kubectl` / k9s to `.10:6443`. It is not a proxy in front of the API. A host that is not one of these VMs reaches that same API address only through the site VPN, which enters at `k8s-fw-1` / `k8s-fw-2`. After ingress, `.10` also accepts TCP 80 and 443 and HAProxy sends those to the workers.
 
 ## VM resources
 
@@ -170,7 +175,7 @@ The 50% share is set on the VM by the person who creates it. Scenario 4 leaves 2
 | 02  | k8s-fw-2               | Firewall (WAN + LAN)                                 | 10.0.1.2         | 2      | 2 GB       | 20 GB      | -          |
 | 03  | k8s-lb-1               | API HAProxy (VRRP master)                            | 10.0.1.8         | 1      | 1 GB       | 10 GB      | -          |
 | 04  | k8s-lb-2               | API HAProxy (VRRP backup)                            | 10.0.1.9         | 1      | 1 GB       | 10 GB      | -          |
-| 05  | k8s-bastion            | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11        | 4      | 4 GB       | 40 GB      | -          |
+| 05  | k8s-bastion            | Jump / kubectl + k9s + Helm / Nexus / Prom / Grafana | 10.0.1.11        | 4      | 4 GB       | 40 GB      | -          |
 | 06  | k8s-ctrl-1             | Control Plane + etcd                                 | 10.0.1.12        | 4      | 8 GB       | 30 GB      | -          |
 | 07  | k8s-ctrl-2             | Control Plane + etcd                                 | 10.0.1.13        | 4      | 8 GB       | 30 GB      | -          |
 | 08  | k8s-ctrl-3             | Control Plane + etcd                                 | 10.0.1.14        | 4      | 8 GB       | 30 GB      | -          |
@@ -191,7 +196,7 @@ Workers are 24 GB here, not 28 GB, so the GPU VM fits inside 95% of the host. `k
 | 02  | k8s-fw-2               | Firewall (WAN + LAN)                                 | 10.0.1.2         | 2      | 2 GB       | 20 GB      | -          |
 | 03  | k8s-lb-1               | API HAProxy (VRRP master)                            | 10.0.1.8         | 1      | 1 GB       | 10 GB      | -          |
 | 04  | k8s-lb-2               | API HAProxy (VRRP backup)                            | 10.0.1.9         | 1      | 1 GB       | 10 GB      | -          |
-| 05  | k8s-bastion            | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
+| 05  | k8s-bastion            | Jump / kubectl + k9s + Helm / Nexus / Prom / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
 | 06  | k8s-ctrl-1             | Control Plane + etcd                                 | 10.0.1.12        | 4      | 8 GB       | 30 GB      | -          |
 | 07  | k8s-ctrl-2             | Control Plane + etcd                                 | 10.0.1.13        | 4      | 8 GB       | 30 GB      | -          |
 | 08  | k8s-ctrl-3             | Control Plane + etcd                                 | 10.0.1.14        | 4      | 8 GB       | 30 GB      | -          |
@@ -213,7 +218,7 @@ Control plane drops to 2 nodes. etcd moves to 3 smaller VMs. Apiserver is statel
 | 02  | k8s-fw-2               | Firewall (WAN + LAN)                                 | 10.0.1.2         | 2      | 2 GB       | 20 GB      | -          |
 | 03  | k8s-lb-1               | API HAProxy (VRRP master)                            | 10.0.1.8         | 1      | 1 GB       | 10 GB      | -          |
 | 04  | k8s-lb-2               | API HAProxy (VRRP backup)                            | 10.0.1.9         | 1      | 1 GB       | 10 GB      | -          |
-| 05  | k8s-bastion            | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
+| 05  | k8s-bastion            | Jump / kubectl + k9s + Helm / Nexus / Prom / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
 | 06  | k8s-ctrl-1             | Control Plane                                        | 10.0.1.12        | 4      | 8 GB       | 30 GB      | -          |
 | 07  | k8s-ctrl-2             | Control Plane                                        | 10.0.1.13        | 4      | 8 GB       | 30 GB      | -          |
 | 08  | k8s-etcd-1             | etcd                                                 | 10.0.1.15        | 2      | 4 GB       | 20 GB      | -          |
@@ -236,7 +241,7 @@ Workers are 24 GB instead of 28 GB, so this row can keep a 16 GB GPU VM and stil
 | 02  | k8s-fw-2               | Firewall (WAN + LAN)                                 | 10.0.1.2         | 2      | 2 GB       | 20 GB      | -          |
 | 03  | k8s-lb-1               | API HAProxy (VRRP master)                            | 10.0.1.8         | 1      | 1 GB       | 10 GB      | -          |
 | 04  | k8s-lb-2               | API HAProxy (VRRP backup)                            | 10.0.1.9         | 1      | 1 GB       | 10 GB      | -          |
-| 05  | k8s-bastion            | Jump / kubectl + Helm / Nexus / Prometheus / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
+| 05  | k8s-bastion            | Jump / kubectl + k9s + Helm / Nexus / Prom / Grafana | 10.0.1.11        | 2      | 4 GB       | 40 GB      | -          |
 | 06  | k8s-ctrl-1             | Control Plane                                        | 10.0.1.12        | 4      | 8 GB       | 30 GB      | -          |
 | 07  | k8s-ctrl-2             | Control Plane                                        | 10.0.1.13        | 4      | 8 GB       | 30 GB      | -          |
 | 08  | k8s-etcd-1             | etcd                                                 | 10.0.1.15        | 2      | 4 GB       | 20 GB      | -          |

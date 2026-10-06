@@ -14,6 +14,8 @@ kubelet/containerd/Ceph/keepalived/HAProxy stay **systemd** on their own VMs. HA
 
 The first `docker compose pull` for these three images still hits the internet (via the firewall pair). After Nexus is up, apt and **cluster** image pulls go through the cache.
 
+`kubectl`, k9s, and Helm are not installed in this file. The API does not exist yet. [05-deploy-kubernetes.md](05-deploy-kubernetes.md) installs `kubectl` and k9s here, writes `~/.kube/config`, and points it at `https://10.0.1.10:6443`. k9s reads that same file. Its own config sets `logoless: true`, so the top bar does not show the k9s name. This VM is on the cluster LAN, so that connection does not use the VPN. `kubectl` and k9s on any other host reach the same address only through the site VPN, which enters at the firewall pair. The VPN server is outside this repo.
+
 **Applies to:** `k8s-bastion` only.
 
 ## Why Docker here and systemd on the cluster
@@ -42,6 +44,7 @@ case "$ID" in
 esac
 sudo curl -fsSL "$DOCKER_URL/gpg" -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
+cat /etc/apt/sources.list.d/docker.sources 2>/dev/null || true        # read before replace
 sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
 URIs: ${DOCKER_URL}
@@ -50,6 +53,7 @@ Components: stable
 Architectures: $(dpkg --print-architecture)
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
+cat /etc/apt/sources.list.d/docker.sources                            # apt reads this file
 sudo apt update
 apt-cache madison docker-ce docker-ce-cli containerd.io docker-compose-plugin
 DOCKER_CE_VERSION="<version from madison>"          # docker-ce and docker-ce-cli share this string
@@ -69,7 +73,10 @@ Pin image tags (confirm on Docker Hub; examples below were current-ish in 2026-0
 
 ## Steps — `/opt/nexus/compose.yaml`
 
-```yaml
+Read any file already there, write this one, then `compose up` loads it. `restart: unless-stopped` is what brings Nexus back after a reboot.
+```sh
+ls -l /opt/nexus/compose.yaml 2>/dev/null || true
+sudo tee /opt/nexus/compose.yaml <<'EOF'
 services:
   nexus:
     image: sonatype/nexus3:3.96.3
@@ -84,9 +91,7 @@ services:
 
 volumes:
   nexus-data:
-```
-
-```sh
+EOF
 cd /opt/nexus && sudo docker compose up -d
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081
 ```
@@ -95,9 +100,10 @@ First start can take a minute. Change the admin password in the UI (`http://k8s-
 
 ## Steps — `/opt/prometheus`
 
-`/opt/prometheus/prometheus.yml` — scrape every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15/.16/.17`. GPU: add `.24`. Targets stay `DOWN` until [08-observability.md](08-observability.md) installs `node_exporter`.
-
-```yaml
+`/opt/prometheus/prometheus.yml` scrapes every node in the [02-prepare.md](02-prepare.md) hosts file (example LAN). External etcd: drop `.14`, add `.15` `.16` `.17`. GPU: add `.24`. Targets stay `DOWN` until [08-observability.md](08-observability.md) installs `node_exporter`. Write both files, then `compose up` loads them.
+```sh
+ls -l /opt/prometheus/prometheus.yml /opt/prometheus/compose.yaml 2>/dev/null || true
+sudo tee /opt/prometheus/prometheus.yml <<'EOF'
 global:
   scrape_interval: 15s
 scrape_configs:
@@ -115,11 +121,8 @@ scrape_configs:
           - 10.0.1.21:9100
           - 10.0.1.22:9100
           - 10.0.1.23:9100
-```
-
-`/opt/prometheus/compose.yaml`:
-
-```yaml
+EOF
+sudo tee /opt/prometheus/compose.yaml <<'EOF'
 services:
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -132,18 +135,17 @@ services:
 
 volumes:
   prometheus-data:
-```
-
-```sh
+EOF
 cd /opt/prometheus && sudo docker compose up -d
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9090/-/ready
 ```
 
 ## Steps — `/opt/grafana/compose.yaml`
 
-Grafana cannot use Compose DNS `prometheus` because it is a different project. Reach Prometheus on the host:
-
-```yaml
+Grafana cannot use Compose DNS `prometheus` because it is a different project. Reach Prometheus on the host. The admin password stays in a local env file, not in this repo.
+```sh
+ls -l /opt/grafana/compose.yaml 2>/dev/null || true
+sudo tee /opt/grafana/compose.yaml <<'EOF'
 services:
   grafana:
     image: grafana/grafana:11.5.2
@@ -160,9 +162,7 @@ services:
 
 volumes:
   grafana-data:
-```
-
-```sh
+EOF
 cd /opt/grafana && sudo docker compose up -d
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000
 ```
@@ -185,9 +185,9 @@ Create apt proxies for the distro of *this* cluster only, plus docker proxies. E
 
 ## Steps — point the cluster at Nexus
 
-**Apt** on every other node — URI host `http://k8s-bastion:8081/repository/<name>/`. Keep upstream `signed-by` keyrings.
+Not a command in this pass. The repository table above is the list to create in the Nexus UI. When a node is switched over, it is still a file change: read the current apt list or containerd config, write the file that tool reads, then `apt update` or `systemctl restart containerd`. Keep the upstream `signed-by` keyrings. Do not `export` a mirror or edit a running daemon only in memory.
 
-**containerd mirrors** on ctrl/workers — [05-deploy-kubernetes.md](05-deploy-kubernetes.md).
+Apt URI host, once a proxy exists: `http://k8s-bastion:8081/repository/<name>/`. containerd has no `hosts.toml` in this manual yet. [05-deploy-kubernetes.md](05-deploy-kubernetes.md) does not install one.
 
 ## Prerequisites
 - [03-firewall.md](03-firewall.md)
