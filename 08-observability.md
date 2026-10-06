@@ -13,7 +13,9 @@ apt-cache madison prometheus-node-exporter
 NODE_EXPORTER_VERSION="<version from the list above>"
 sudo apt install -y prometheus-node-exporter=${NODE_EXPORTER_VERSION}
 sudo apt-mark hold prometheus-node-exporter
-sudo systemctl enable --now prometheus-node-exporter
+systemctl cat prometheus-node-exporter | grep -E 'ExecStart|EnvironmentFile'
+cat /etc/default/prometheus-node-exporter 2>/dev/null || true   # read; leave it unless a flag must change
+sudo systemctl enable --now prometheus-node-exporter           # the unit file is what boot starts
 ```
 Verify locally: `curl -s localhost:9100/metrics | head`. Prefer the Nexus apt proxy from step 07 if you created `apt-debian` / `apt-ubuntu`.
 
@@ -21,7 +23,7 @@ Verify locally: `curl -s localhost:9100/metrics | head`. Prefer the Nexus apt pr
 ```sh
 curl -s http://k8s-bastion:9090/api/v1/targets | grep -E '"health"|up'
 ```
-Every node_exporter target should be `"up"`. If a target is missing, edit `/opt/prometheus/prometheus.yml` and `cd /opt/prometheus && sudo docker compose up -d`.
+Every node_exporter target should be `"up"`. If a target is missing, `grep -n 9100 /opt/prometheus/prometheus.yml`, change that file, then `cd /opt/prometheus && sudo docker compose up -d` so Prometheus loads it.
 
 **3. Grafana:** open `http://k8s-bastion:3000`. Datasource from inside the Grafana container: `http://host.docker.internal:9090`. Import a maintained "Node Exporter Full" dashboard from [grafana.com/dashboards](https://grafana.com/dashboards).
 

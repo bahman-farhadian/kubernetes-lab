@@ -7,11 +7,13 @@ Deployed on `CEPH_DEPLOY_RELEASE`/`CEPH_DEPLOY_VERSION` ([06-ceph.md](06-ceph.md
 **1. New Ceph repo** — on all three workers, then stop rebalancing while daemons restart.
 ```sh
 CEPH_UPGRADE_RELEASE=tentacle     # next release after the one you deployed; recheck docs.ceph.com
+grep -n debian- /etc/apt/sources.list.d/ceph.list     # the suite you are leaving
 sudo sed -i "s/debian-${CEPH_DEPLOY_RELEASE}/debian-${CEPH_UPGRADE_RELEASE}/" /etc/apt/sources.list.d/ceph.list
+grep -n debian- /etc/apt/sources.list.d/ceph.list     # apt reads this file
 sudo apt update
 apt-cache madison ceph-common                         # copy the new pin
 CEPH_UPGRADE_VERSION="20.2.4-1~$(lsb_release -sc)"    # must match madison
-sudo ceph osd set noout                                # do not rebalance while daemons restart
+sudo ceph osd set noout                                # mons store this; it survives a daemon restart
 ```
 
 **3. Mons, one node at a time** — quorum before the next node.

@@ -82,6 +82,7 @@ spec:
             backend:
               service: {name: smoketest-nginx, port: {number: 80}}
 ```
+Save the block above as `smoketest-nginx.yaml`. `kubectl apply` reads that file and stores it in the cluster.
 ```sh
 kubectl apply -f smoketest-nginx.yaml
 kubectl -n smoke-test rollout status deployment/smoketest-nginx
@@ -125,6 +126,7 @@ spec:
             limits: {cpu: "500m", memory: "256Mi"}
 ```
 Each replica requests/uses ~0.5 vCPU / 256 Mi. `--timeout 900s` (15 min) is a safety net — if you walk away, load doesn't run forever; re-run `kubectl apply`/bump replicas to keep going past that.
+Save the block above as `smoketest-stress.yaml`.
 ```sh
 kubectl apply -f smoketest-stress.yaml
 ```

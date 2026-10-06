@@ -4,7 +4,7 @@
 
 **Rule for every held package** (`containerd`, `kubelet`/`kubeadm`/`kubectl`, `haproxy`, `keepalived`, `etcd-*`, `ceph-*`, `docker-ce` on the bastion, `prometheus-node-exporter`): `sudo apt-mark unhold <pkg>` → drain/cordon if it's a k8s node → `apt install <pkg>=<exact-new-version>` (never a bare `apt install`/`apt upgrade`) → verify healthy → `sudo apt-mark hold <pkg>` again. A package never spends more than the length of one upgrade step unheld.
 
-Compose on the bastion: change the image tag in **that app's** file only (`/opt/nexus/compose.yaml`, `/opt/prometheus/compose.yaml`, or `/opt/grafana/compose.yaml`), then `cd /opt/<app> && sudo docker compose pull && sudo docker compose up -d`. Do not pull without changing the tag.
+Compose on the bastion: read **that app's** file (`/opt/nexus/compose.yaml`, `/opt/prometheus/compose.yaml`, or `/opt/grafana/compose.yaml`), change the image tag in the file, then `cd /opt/<app> && sudo docker compose pull && sudo docker compose up -d`. Do not pull without changing the tag. `compose up` is what loads the file.
 
 ## Steps — Kubernetes minor upgrade
 
@@ -13,10 +13,12 @@ Deployed in [05-deploy-kubernetes.md](05-deploy-kubernetes.md). Upgrading one mi
 **1. New minor repo** — on `k8s-ctrl-1` first. One minor up. Do not skip.
 ```sh
 KUBE_UPGRADE_MINOR=v1.37          # exactly one minor above the deployed minor
+cat /etc/apt/sources.list.d/kubernetes.list                       # the minor you are leaving
 curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/Release.key" \
   | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg   # replace the old keyring file
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_UPGRADE_MINOR}/deb/ /" \
   | sudo tee /etc/apt/sources.list.d/kubernetes.list
+cat /etc/apt/sources.list.d/kubernetes.list                       # apt reads this file
 sudo apt update
 apt-cache madison kubeadm                            # copy the new pin
 KUBE_UPGRADE_VERSION="1.37.0-1.1"                    # must match madison

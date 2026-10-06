@@ -9,7 +9,7 @@ Do this only when `k8s-work-4` is in the table you deployed ([01-inventory.md](0
 ## Covers
 - Confirm the GPU is visible in the guest (`lspci`, `nvidia-smi` after the driver)
 - NVIDIA driver + `nvidia-container-toolkit` inside the VM
-- Wire the toolkit into containerd, restart containerd + kubelet
+- Wire the toolkit into containerd: read `/etc/containerd/config.toml`, write that file, then restart containerd and kubelet. Do not change the running daemon only in memory
 - Label + **taint** `k8s-work-4` (`nvidia.com/gpu=present:NoSchedule`) so ordinary pods cannot land there
 - NVIDIA Kubernetes device plugin DaemonSet (plain device plugin — no GPU Operator / MIG / time-slicing, per [00-overview.md](00-overview.md#fixed-decisions))
 - A one-pod smoke test that *tolerates* the taint and requests `nvidia.com/gpu: 1`

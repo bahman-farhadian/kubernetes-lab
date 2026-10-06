@@ -16,8 +16,10 @@ Ceph stays on these three workers in every scenario. `k8s-work-4` is a GPU node 
 ```sh
 CEPH_DEPLOY_RELEASE=squid          # v19; recheck docs.ceph.com/en/latest/releases
 curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph.gpg
+cat /etc/apt/sources.list.d/ceph.list 2>/dev/null || true
 echo "deb [signed-by=/usr/share/keyrings/ceph.gpg] https://download.ceph.com/debian-${CEPH_DEPLOY_RELEASE}/ $(lsb_release -sc) main" \
   | sudo tee /etc/apt/sources.list.d/ceph.list     # suite comes from this VM's codename
+cat /etc/apt/sources.list.d/ceph.list              # apt reads this file
 sudo apt update
 apt-cache madison ceph-common                      # copy the exact version string
 CEPH_DEPLOY_VERSION="19.2.6-1~$(lsb_release -sc)"  # must match madison
@@ -27,8 +29,9 @@ sudo apt-mark hold ceph-mon ceph-mgr ceph-osd ceph-common
 ```
 Use the same `CEPH_DEPLOY_VERSION` on all three nodes.
 
-**2. Cluster identity** — once, on `k8s-work-1`. Copy the finished `ceph.conf` to the other two workers.
+**2. Cluster identity** — once, on `k8s-work-1`. The mons read `/etc/ceph/ceph.conf`. Copy that finished file to the other two workers and `grep fsid` there before their mons start.
 ```sh
+cat /etc/ceph/ceph.conf 2>/dev/null || true          # package sample, read before replace
 FSID=$(uuidgen)
 echo "$FSID"   # Ceph-CSI clusterID; keep it
 sudo tee /etc/ceph/ceph.conf <<EOF
@@ -42,8 +45,9 @@ auth service required = cephx
 auth client required = cephx
 osd pool default size = 3
 EOF
+grep -n fsid /etc/ceph/ceph.conf
 ```
-Copy this `ceph.conf` to `/etc/ceph/ceph.conf` on all OSD nodes.
+Copy this `ceph.conf` to `/etc/ceph/ceph.conf` on `k8s-work-2` and `k8s-work-3`. On each, `grep fsid /etc/ceph/ceph.conf` must show the same id before step 4.
 
 **3. Generate keyrings and monmap** (once, on `k8s-work-1`, then copy the resulting files to the other two):
 ```sh
@@ -62,17 +66,22 @@ Copy `/tmp/ceph.mon.keyring`, `/tmp/monmap`, and `/etc/ceph/ceph.client.admin.ke
 ```sh
 sudo -u ceph mkdir -p /var/lib/ceph/mon/ceph-k8s-work-1          # owned by ceph, not root
 sudo -u ceph ceph-mon --mkfs -i k8s-work-1 --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
-sudo systemctl enable --now ceph-mon@k8s-work-1                 # start this mon
+sudo systemctl enable ceph-mon@k8s-work-1
+sudo systemctl restart ceph-mon@k8s-work-1                      # this unit reads ceph.conf
 ```
 
 **5. Bootstrap each mgr** — create the directory first. `ceph auth -o` will not create parent directories.
 ```sh
+ls -ld /var/lib/ceph/mgr/ceph-k8s-work-1 2>/dev/null || true
 sudo mkdir -p /var/lib/ceph/mgr/ceph-k8s-work-1
 sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1
 sudo ceph auth get-or-create mgr.k8s-work-1 mon 'allow profile mgr' osd 'allow *' mds 'allow *' \
   -o /var/lib/ceph/mgr/ceph-k8s-work-1/keyring
-sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1/keyring     # daemon cannot read a root-owned key
-sudo systemctl enable --now ceph-mgr@k8s-work-1
+ls -l /var/lib/ceph/mgr/ceph-k8s-work-1/keyring                  # root-owned until the next line
+sudo chown ceph:ceph /var/lib/ceph/mgr/ceph-k8s-work-1/keyring   # daemon cannot read a root-owned key
+ls -l /var/lib/ceph/mgr/ceph-k8s-work-1/keyring                  # ceph:ceph
+sudo systemctl enable ceph-mgr@k8s-work-1
+sudo systemctl restart ceph-mgr@k8s-work-1                      # the unit reads that keyring
 ```
 
 **6. Bootstrap-OSD keyring** — `ceph-volume` authenticates as `client.bootstrap-osd`. Without this file, OSD create fails ([Ceph manual deployment](https://docs.ceph.com/en/latest/install/manual-deployment/)):

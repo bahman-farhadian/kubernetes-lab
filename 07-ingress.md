@@ -16,9 +16,43 @@ helm install traefik traefik/traefik -n traefik --version "${TRAEFIK_CHART_VERSI
 kubectl get svc -n traefik                                  # note the NodePort for 80 and 443
 ```
 
-**2. Publish 80 and 443** — on both `k8s-lb-1` and `k8s-lb-2`, add frontends to the HAProxy file that already binds `10.0.1.10:6443`. Backends are `<worker-ip>:<NodePort>`.
+**2. Publish 80 and 443** — on both `k8s-lb-1` and `k8s-lb-2`. Read `/etc/haproxy/haproxy.cfg`, append these frontends to that file, check it, then reload. Backends are `<worker-ip>:<NodePort>` from step 1. Skip the append if `k8s-http` is already in the file. Nonlocal bind is already set.
 ```sh
-sudo systemctl reload haproxy    # pick up the new frontends; nonlocal bind is already set
+HTTP_NODEPORT=<80 nodeport>
+HTTPS_NODEPORT=<443 nodeport>
+grep -n -E 'bind |^frontend' /etc/haproxy/haproxy.cfg
+sudo tee -a /etc/haproxy/haproxy.cfg <<EOF
+
+frontend k8s-http
+    bind 10.0.1.10:80
+    mode tcp
+    timeout client 1h
+    default_backend k8s-http-backend
+
+backend k8s-http-backend
+    mode tcp
+    balance roundrobin
+    timeout server 1h
+    server k8s-work-1 10.0.1.21:${HTTP_NODEPORT} check
+    server k8s-work-2 10.0.1.22:${HTTP_NODEPORT} check
+    server k8s-work-3 10.0.1.23:${HTTP_NODEPORT} check
+
+frontend k8s-https
+    bind 10.0.1.10:443
+    mode tcp
+    timeout client 1h
+    default_backend k8s-https-backend
+
+backend k8s-https-backend
+    mode tcp
+    balance roundrobin
+    timeout server 1h
+    server k8s-work-1 10.0.1.21:${HTTPS_NODEPORT} check
+    server k8s-work-2 10.0.1.22:${HTTPS_NODEPORT} check
+    server k8s-work-3 10.0.1.23:${HTTPS_NODEPORT} check
+EOF
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg             # stop if this fails
+sudo systemctl reload haproxy                          # the process reads the file
 ```
 
 **3. Check the VIP** — not the bastion address.

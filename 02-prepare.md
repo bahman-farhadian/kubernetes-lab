@@ -31,14 +31,18 @@ Every node in the inventory table you circled in [01-inventory.md](01-inventory.
 
 ## Steps
 
-**1. Hostname and `/etc/hosts`** — one inventory name per VM. The hosts block is the same on every node.
+**1. Hostname and `/etc/hosts`** — one inventory name per VM. The hosts block is the same on every node. Read both first. `hostnamectl` writes `/etc/hostname`. The resolver reads `/etc/hosts`. Skip the append if the grep already shows this scenario's names.
 ```sh
-sudo hostnamectl set-hostname k8s-ctrl-1   # name from the inventory table for this VM
+hostname
+grep -n -E 'k8s-|10\.0\.1\.' /etc/hosts || true          # read before writing
+sudo hostnamectl set-hostname k8s-ctrl-1                # this VM's name from the inventory table
+hostnamectl --static                                    # must match that name
 ```
-Append the matching block below to `/etc/hosts` on **every** node (same block everywhere). These are the **example** LAN addresses from [01-inventory.md](01-inventory.md) — substitute yours if they differ. Do not add WAN addresses here.
+Run **one** append below, on every node. Stacked uses the first block. External etcd uses the second. These are the **example** LAN addresses from [01-inventory.md](01-inventory.md) — substitute yours if they differ. Do not add WAN addresses here. GPU: after the append, add `10.0.1.24  k8s-work-4` to the same file and run `getent hosts k8s-work-4`.
 
 Stacked etcd:
-```
+```sh
+sudo tee -a /etc/hosts <<'EOF'
 10.0.1.1    k8s-fw-1
 10.0.1.2    k8s-fw-2
 10.0.1.8    k8s-lb-1
@@ -52,10 +56,13 @@ Stacked etcd:
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
+EOF
+getent hosts k8s-fw-vip k8s-apiserver                   # the file answers; no extra reload
 ```
 
 External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
-```
+```sh
+sudo tee -a /etc/hosts <<'EOF'
 10.0.1.1    k8s-fw-1
 10.0.1.2    k8s-fw-2
 10.0.1.8    k8s-lb-1
@@ -71,11 +78,11 @@ External etcd (no `k8s-ctrl-3`; dedicated etcd instead):
 10.0.1.21   k8s-work-1
 10.0.1.22   k8s-work-2
 10.0.1.23   k8s-work-3
+EOF
+getent hosts k8s-fw-vip k8s-apiserver k8s-etcd-1
 ```
 
-Profile notes:
-- **GPU** — add `10.0.1.24  k8s-work-4`.
-- There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
+There is no `k8s-monitor` VM. Prometheus/Grafana and Nexus run on `k8s-bastion`.
 
 **2. Disable swap** — kubeadm will not start while swap is on. Read it first. The file change is what survives reboot. `swapoff` only applies that file to the running system.
 ```sh
@@ -113,7 +120,13 @@ lsmod | grep -E '^(overlay|br_netfilter)'
 timedatectl status | grep "synchronized"   # must say yes before certificates are issued
 ```
 
-**5. Host packet filter** — on cluster nodes, if `nftables`/`ufw` is active, open the LAN port list from [01-inventory.md](01-inventory.md); otherwise leave it disabled and rely on the firewall pair plus network isolation. Do not confuse this with `k8s-fw-*` (those VMs are [03-firewall.md](03-firewall.md)).
+**5. Host packet filter** — cluster nodes only. The firewall VMs are [03-firewall.md](03-firewall.md). Read whether a filter is already running. If neither is active, leave it that way. If one is active, allow the LAN from the file that service reads, then reload that service. `nft add` is gone at the next reboot.
+```sh
+systemctl is-active nftables || true
+systemctl is-active ufw || true
+sudo nft list ruleset || true                                    # what is loaded now
+```
+nftables active: read `/etc/nftables.conf`, add the allows there, `sudo nft -c -f /etc/nftables.conf`, then `sudo systemctl restart nftables`. ufw active: `sudo ufw status`, then `sudo ufw allow from 10.0.1.0/24` — that writes `/etc/ufw/user.rules` and ufw loads it. Port list: [01-inventory.md](01-inventory.md).
 
 **6. Base packages** — still on the temporary default route. No cluster packages yet, so nothing to hold.
 ```sh
